@@ -20,17 +20,22 @@
       <section class="intro" aria-label="About OakScript">
         <p class="lead">A general-purpose programming language with built-in graphics, audio, and GPU compute.</p>
         <a class="download" href="downloads/OakScript-0.7.0-win-x64.zip" download>Download OakScript</a>
-        <p class="details">0.7.0 ? Windows x64</p>
+        <p class="details">v0.7.0 - Windows x64</p>
         <p class="requirements">Console programs need no extra runtimes. The runner's graphics require a Vulkan-capable driver.</p>
       </section>
       <section class="example" aria-labelledby="run-title">
-        <h2 id="run-title">Run a file</h2>
-        <p>Extract the download and save this as <code>hello.oak</code>:</p>
-        <pre><code><span class="keyword">def</span> __main__():(
-    print(<span class="string">"Hello from OakScript!"</span>)
-)</code></pre>
-        <p>Then run:</p>
-        <pre class="command"><code>.\oakscript.exe hello.oak</code></pre>
+        <h2 id="run-title">Example file</h2>
+        <pre><code><span class="keyword">def</span> square(<span class="keyword">int</span> value) -&gt; <span class="keyword">int</span>:(
+    return value * value
+)
+
+<span class="keyword">int</span> total = 0
+<span class="keyword">for</span> value <span class="keyword">in</span> range(1, 6):(
+    total += square(value)
+)
+print(<span class="string">"Total:"</span>, total)</code></pre>
+        <p>To run:</p>
+        <pre class="command"><code>.\oakscript.exe filename.oak</code></pre>
         <nav class="docs" aria-label="Documentation">
           <a href="reference/SYNTAX.txt">Syntax reference</a>
           <a href="reference/NATIVE_COMPILATION.md">Native compilation</a>
@@ -38,12 +43,12 @@
       </section>
       <section class="game" aria-labelledby="game-title">
         <h2 id="game-title">Oak Blocks</h2>
-        <p>A small 3D building game written in Oak. The download includes its source, libraries, assets, and runner.</p>
+        <p>A small 3D sandbox game written in Oak. The download includes its source, libraries, assets, and runner.</p>
         <a href="downloads/OakBlocks.zip" download>Download the example</a>
       </section>
     </main>
     <footer>
-      <span>? 2026 FIRECATCHER404</span>
+      <span>Updated 2026, By FIRECATCHER404</span>
       <div><a href="reference/LICENSE.txt">License</a><a href="reference/THIRD-PARTY-NOTICES.md">Third-party notices</a></div>
     </footer>
   </div>
