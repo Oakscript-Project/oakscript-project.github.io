@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Finding imported libraries - OakScript</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { background: Canvas; color: CanvasText; }
+    pre { overflow-x: auto; }
+  </style>
+</head>
+<body>
+  <nav aria-label="Reference navigation"><a href="../">OakScript</a> | <a href="LIBRARY_PATHS.md">Source</a></nav>
+  <main>
+<h1>Finding imported libraries</h1>
+<p>OakScript 0.7.0 resolves the complete import graph before running or generating
+native code. Direct imports use their paths; named imports can use a JSON alias
+map, local files, library search paths or installed packages.</p>
+<p>Put <code>oaklibraries.json</code> beside your project, or in an ancestor directory:</p>
+<pre><code class="language-json">{
+  &quot;aliases&quot;: {
+    &quot;mathlib&quot;: &quot;libraries/my_math.oak&quot;,
+    &quot;utilities&quot;: &quot;C:/OakLibraries/utilities.oak&quot;
+  },
+  &quot;libpath&quot;: [&quot;shared&quot;, &quot;C:/OakLibraries&quot;]
+}
+</code></pre>
+<pre><code class="language-oak">from mathlib import square
+from utilities import first;second
+from &quot;../library.oak&quot; import *
+</code></pre>
+<p>Relative JSON paths resolve beside the JSON file. Aliases are case-sensitive
+module names mapped to <code>.oak</code> files or library directories with <code>main.oak</code>.
+They are separate from export aliases such as <code>import square as squared</code>.
+The nearest configuration to an importing file takes precedence; the entry
+project's configuration also supplies aliases for external imported libraries.
+Use <code>--libconfig FILE.json</code> to select one explicit configuration instead.
+Invalid JSON, duplicate aliases and invalid field types fail with a diagnostic.</p>
+<p>Add search directories or individual library files with <code>--libpath</code>:</p>
+<pre><code class="language-powershell">oakscript --libpath &quot;C:/OakLibraries&quot; main.oak
+oakscript --libpath &quot;C:/OakLibraries;D:/OtherLibraries&quot; --check main.oak
+oakscript --libpath &quot;C:/OakLibraries/mathlib.oak&quot; main.oak
+oakscript --libpath &quot;C:/One&quot; --libpath &quot;D:/Two&quot; main.oak
+oakscript compile main.oak -o main.exe --libpath &quot;C:/OakLibraries&quot;
+oakscript compile main.oak --libconfig library-aliases.json -o main.exe
+</code></pre>
+<p>On Windows, join paths with semicolons; repeated flags also work. CLI paths
+resolve from the terminal's working directory. Runner options precede the
+source file; native compile options follow its source file. Arguments after a
+runner's source filename are still ordinary script arguments.</p>
+<p>Resolution order:</p>
+<ol>
+<li>A named import's configured JSON alias, when its target exists.</li>
+<li>The direct path or <code>NAME.oak</code> beside the importing file. Extensionless library
+directories can use <code>main.oak</code>.</li>
+<li>CLI search paths in their supplied order, then JSON <code>libpath</code> entries.
+Direct <code>.oak</code> entries match their filename or a mapped alias's target filename.
+Directory searches preserve relative subpaths and also try the filename.
+Missing absolute imports can be relocated by filename.</li>
+<li>An installed package in the entry project's <code>oak.lock.json</code>.</li>
+<li>A previously selected missing library, then an interactive request for its
+file or directory if input is available.</li>
+</ol>
+<p>An existing configured alias wins over a same-named local module. Explicit
+<code>pkg:NAME</code> imports retain locked package resolution and require installation;
+they do not silently switch to arbitrary source files. Imports never download
+libraries automatically.</p>
+<p>When a library is missing, an interactive CLI asks for its <code>.oak</code> file or
+directory. Quoted paths are accepted, invalid selections can be retried, and
+blank input cancels. A selection is retained for the current compilation/run;
+it does not rewrite JSON. Use JSON or <code>--libpath</code> to make it persistent.</p>
+<p>Piped/batch execution and redirected diagnostics fail without asking and report
+the importing source location and searched paths. <code>--prompt-imports</code> explicitly
+enables prompting even with redirected input; <code>--no-prompt-imports</code> disables it.
+EOF terminates the prompt with an import error. Prompts use stderr, preserving
+program stdout. The language server never prompts and automatically reads JSON
+configuration for diagnostics, definitions and completion.</p>
+<p>The same resolver is used by checking, both execution engines, bytecode
+inspection, native compilation and imports inside <code>exec</code>/<code>evxec</code>. Resolved
+modules keep their canonical identities, one-time initialization and their own
+source-relative asset/file paths. Native output includes supported imported
+code; source libraries are not required beside the compiled EXE. Data/assets
+remain separate and use the existing native path rules.</p>
+  </main>
+</body>
+</html>
