@@ -1,0 +1,6 @@
+def __main__():(
+    print("Hello from OakScript!")
+    for value in range(1, 6):(
+        print(value ** 2)
+    )
+)

@@ -1,0 +1,1742 @@
+OAKSCRIPT 0.7.0 - SYNTAX AND BUILT-IN REFERENCE
+============================================
+
+This describes the implemented Windows x64 runner, not planned features.
+OakScript's short name is Oak. Source files end in .oak.
+Names and imported exports are case-sensitive.
+Square brackets in API signatures mean optional arguments; do not type them.
+Examples marked BEGIN EXAMPLE / END EXAMPLE are complete source files.
+Save each example using the indicated filename. Graphics examples that mention
+assets require those assets beside the example, as described in section 13.
+
+Runner licensing: see LICENSE.txt. You may use the runner on devices you control,
+but redistributing its executable or original compiler/runtime implementation
+source requires the owner's prior written permission, subject to the independent
+rights described in the license. Your independently authored .oak programs and
+their outputs are not restricted merely because they use OakScript. Share an
+official runner download link rather than bundling the EXE with your programs.
+
+1. RUNNING FILES
+---------------
+From PowerShell, with oakscript.exe in the current directory:
+    .\oakscript.exe C:/path/to/file.oak
+    .\oakscript.exe "C:/path with spaces/file.oak" first "second argument"
+
+If the EXE's directory is on PATH:
+    oakscript C:/path/to/file.oak
+
+Runner options precede the source filename. Arguments following the filename
+belong to the script, even if they begin with --.
+
+    oakscript --help                  oakscript -h
+    oakscript --version               oakscript -v
+    oakscript --check program.oak      oakscript check program.oak
+    oakscript run program.oak
+    oakscript --bytecode program.oak
+    oakscript --no-opt program.oak
+    oakscript --engine bytecode program.oak
+    oakscript --engine ast program.oak
+    oakscript --profile program.oak
+    oakscript --frames 4 game.oak
+    oakscript --frames 4 --capture frame.png game.oak
+    oakscript --frames -1 --capture failure.png game.oak
+    oakscript -- program.oak
+    oakscript compile program.oak -o program.exe
+    oakscript compile program.oak --emit-cpp generated.cpp --compiler C:/msys64/mingw64/bin/g++.exe
+
+--check checks the entry file and every reachable import without execution.
+--bytecode prints compiled bytecode without execution.
+Bytecode with optimization is the default; ast is the reference interpreter.
+--profile reports checking/execution times to stderr.
+--frames closes a graphical program after a positive number of frames.
+--nowindimlim bypasses Oak's default 16384-pixel window dimension cap. Put it
+before the source filename. It takes no value and is not passed into Oak args.
+Native graphics EXEs accept the same flag. Positive 32-bit integer dimensions,
+GPU capabilities/memory and operating-system limits still apply.
+--capture requires a .png output; without --frames it captures one frame.
+--frames -1 requires --capture and removes the frame limit. Only an explicit
+exit(1) requests capture; returning 1 from __main__, runtime errors and ordinary
+window close do not. Pending drawing is flushed before saving the first window's
+entire current canvas, even without render_screen() or a prior presented frame.
+GPU readback and the full PNG write finish before process exit. No script-side
+completion loop is needed. Capture preserves current canvas values; it does not
+execute code after exit(1) to calculate pixels the program has not drawn.
+Other exits leave an existing output file untouched. No PNG is written if no
+window was created (for example, a source error before execution).
+Capture failures are reported separately and preserve the program's exit code.
+Capture output paths resolve from the terminal's working directory.
+Console scripts do not initialize graphics. Graphics need a Vulkan GPU driver.
+
+compile checks all imports and emits native Windows x64 machine code via C++ and
+MinGW-w64 GCC. GCC is required only when compiling. The compiled program needs
+neither OakScript nor .NET and contains no encoded Oak program, parser or VM.
+The current backend supports CPU, 2D/3D graphics, audio and GPU compute and rejects unsupported constructs;
+see docs/NATIVE_COMPILATION.md for its exact API, limitations and resource paths.
+--emit-cpp writes generated C++ and its support headers for inspection.
+Native records/schemas/options, collections, generators, closures, recoverable errors,
+matrices/quaternions and plain .format fields plus %s/%% are supported.
+Native drawing, fonts, multiple windows, input, shading and compute use hardware
+OpenGL (4.3 for 3D/shaders/compute); audio uses waveOut. The runner uses Vulkan.
+    oakscript compile cubesgameti/cubesgameti.oak --libpath . -o cubesgameti.exe
+    cubesgameti.exe --demo
+    cubesgameti.exe --oak-frames 3 --oak-capture native-frame.png
+    cubesgameti.exe --oak-frames -1 --oak-capture native-failure.png
+For the foldered Cubes Game entry, keep assets/ beside its native EXE.
+--compiler PATH or OAKSCRIPT_CXX selects g++; compile --no-opt selects GCC -O0.
+
+Exit codes: 0 success; 1 source/resource/runtime error; 2 CLI usage error;
+130 interrupted. exit(code) or an integer __main__ return can supply another code.
+
+2. COMMENTS, STATEMENTS, NAMES AND LITERALS
+-----------------------------------------
+    \# A block comment. It may span lines and contain \# nested comments. #\ #\
+    \ A line comment runs to the end of the line, including after statements.
+Use \# ... #\ for nested block comments. // always means floor division.
+
+Statements end at a newline or semicolon. Indentation is cosmetic.
+All statement bodies use :( ... ), never braces or indentation alone.
+Newlines are accepted inside calls, lists, tuples and parameter lists.
+Commas separate their items, and trailing commas are accepted.
+There is no general expression line-continuation character.
+
+Identifiers start with a letter or underscore, then letters, digits or _.
+Numeric literals include decimal, hexadecimal (0xff), binary (0b1010), octal
+(0o17), digit separators (1_000), scientific notation, and imaginary suffix j.
+Integers outside signed 64-bit range become bigint literals.
+true, false and null are literals. null has no general nullable type syntax.
+Use double-quoted or single-quoted strings:
+    "hello"    'hello'    "a\nb"    "tab\tvalue"    "\u0041"
+Escapes: \n \r \t \\ \" \' and \u followed by four hex digits.
+Ordinary quoted strings cannot contain a physical newline. Triple double or
+single quotes accept multiline text. Physical CRLF, CR and LF become \n;
+escapes work as in ordinary strings, and indentation is preserved.
+    string text = """first line
+    second line with "quotes" inside."""
+There is no string interpolation or raw-string prefix.
+Prefer forward slashes in Windows paths, or escape each backslash.
+
+String formatting returns a new string:
+    "abcd{0}fg{1}".format("e", "h")       "abcdefgh"
+    "{} {}".format("Oak", 4)              "Oak 4"
+    "{1}-{0}-{1}".format("a", "b")        "b-a-b"
+    "{{{0}}}".format("Oak")                "{Oak}"
+    "123%s56%s" % (4, 7)                  "1234567"
+    "123%s" % 4                           "1234"
+    "%s %% %d" % ("Oak", 4)               "Oak % 4"
+.format accepts positional arguments, including *value expansion, and returns
+string. Fields may use nonnegative indices {0}, {1}, etc. or automatic {} fields,
+but cannot mix the two styles. {{ and }} escape literal braces. Repeated fields
+and unused .format arguments are permitted. Missing arguments, unmatched braces,
+named fields and unsupported specifications fail with source-location errors.
+The bound method is a callable: formatter="{}".format; formatter("Oak").
+dir(string_value) returns format and length.
+
+Brace format specifications follow {index:SPEC} or {:SPEC}:
+    "{:>8}".format("Oak")                 right alignment
+    "{:_^9}".format("Oak")                underscore fill, center alignment
+    "{:04d}".format(7)                    "0007"
+    "{:+06d}".format(7)                   "+00007"
+    "{:#06x}".format(15)                  "0x000f"
+    "{:.2f}".format(2.5)                  "2.50"
+    "{:.1%}".format(0.25)                 "25.0%"
+    "{0!s:>8}".format(4)                  convert with Oak string formatting
+SPEC accepts optional fill+alignment (< left, > right, ^ center, = sign-aware),
+sign (+, -, space), # alternate form, 0 padding, width, .precision, and type:
+    s string; d/i decimal integer; x/X hex; o octal; b binary;
+    f/F fixed float; e/E exponential; g/G general float; % scaled percentage.
+Integer brace formats require an integer (bool converts to 0/1), and do not
+accept precision. A string precision limits its UTF-16 units. Empty fields
+use Oak's usual string representation: true/false/null retain those spellings.
+Numeric formats use invariant culture and decimal point; no locale grouping.
+Width is 0..1,000,000 and precision is 0..1,000; larger requests fail explicitly.
+
+Percent formatting uses a tuple for multiple replacements or any single value
+for one replacement. A list is one value, not an argument list; wrap a tuple
+inside a one-item tuple to format it as one value: "%s" % ((1, 2),).
+Supported conversions: %s, %d/%i/%u, %f/%F, %e/%E, %g/%G, %x/%X, %o, %c.
+%% is a literal percent and consumes no argument. %s uses Oak string(value);
+%c accepts one Unicode scalar character or its integer code point. %d/%i/%u
+truncate float values; %u is a decimal alias and still uses signed integers.
+Flags -, +, space, # and 0, width and .precision are supported:
+    "%+05d %.2f" % (7, 2.5)               "+0007 2.50"
+    "%.4d" % 12                          "0012"
+    "%-8s" % "Oak"                       left-aligned string
+Percent argument counts must match exactly. No mapping-based replacements,
+dynamic * widths/precisions, nested format fields, !r conversions or f-strings
+are implemented. This is an Oak formatting API, not all of Python's formatting.
+
+BEGIN EXAMPLE: hello.oak
+\# Comments can nest: \# inner #\ outer. #\
+string greeting = "Hello, Oak!"
+print(greeting)
+println("Arguments:", args)
+print("Count:", argc, "Source:", script_path)
+string escaped = "Line one\nLine two\t\u0041"
+print(escaped)
+int first = 2; int second = 3
+assert(first + second == 5)
+END EXAMPLE
+
+3. VARIABLES, ASSIGNMENTS AND SCOPES
+----------------------------------
+    TYPE name = expression           typed declaration
+    name = expression                inferred declaration, or update
+    name += value                    also -= *= /= %= //= **= &= |= ^= <<= >>=
+    object.attribute = value
+    values[index] = value            list or bytearray element assignment
+    values[start:stop:step] = items   list or bytearray slice assignment
+
+Declarations require an initial value. An inferred variable keeps the type
+of its first runtime value. Assignments update the nearest existing binding;
+if there is no binding they create one in the current scope.
+int values may initialize float variables. bool converts to int/float in
+numeric contexts: false becomes 0 and true becomes 1. This applies to arithmetic,
+comparisons, numeric declarations/assignments, typed arguments/returns, numeric
+attributes, vector/matrix components and numeric helpers. Conditions, boolean
+bindings and and/or/not still require bool; numeric/string truthiness is not
+implicit. Strings do not become numbers and float-to-int narrowing is explicit.
+    print((x+y)*(z==1))              numeric mask; zero unless z equals 1
+    int enabled = true              stores 1, not a bool
+    float disabled = false          stores 0.0
+Lists and bytearrays support index/slice assignment. Tuples and strings are
+immutable. Bytearray elements must be integers from 0 through 255.
+Blocks, loops and functions create lexical scopes; local declarations do not
+leak into the parent block. Functions can update existing outer variables.
+Lists, bytearrays, records and graphics resources share references when assigned.
+Vectors and matrices copy their components when bound to typed variables.
+readonly is supported for record/schema fields, not general variables.
+
+4. TYPES, CONSTRUCTORS AND COLLECTIONS
+-------------------------------------
+Built-in declaration types:
+    bool int bigint decimal complex float string list tuple dict set frozenset
+    bytes bytearray function range iterator generator exception
+    vec2 vec3 vec4
+    ivec2 ivec3 ivec4
+    uvec2 uvec3 uvec4
+    color quat mat2 mat3 mat4
+    texture model mesh material shader camera vertex font
+void is a function return annotation. Resource values are created/loaded by
+their dedicated API functions; type annotations do not allocate resources.
+
+int: signed 64-bit, with checked arithmetic. float: finite 64-bit floating point.
+bigint: arbitrary-precision signed integer; bigint(value) converts explicitly.
+decimal: decimal arithmetic with 28-29 significant digits, not arbitrary precision.
+complex: finite double-precision real/imaginary parts, complex(real[,imag]), or 2j.
+decimal(text) preserves decimal digits. Mix decimal/float arithmetic explicitly.
+vecN: N floating components. ivecN: signed 32-bit integer components.
+uvecN: unsigned 32-bit integer components.
+color: 3 or 4 integer channels in 0..255; omitted alpha becomes 255.
+quat: four floating components ordered x,y,z,w, with Hamilton multiplication,
+vector rotation, normalization, inverse, interpolation and conversions.
+matN: N by N matrix, row-major storage, column-vector multiplication.
+
+    vec3 p = (1, 2, 3)               tuple-to-type initialization
+    p = vec3(4, 5, 6)                explicit constructor
+    color c = color(255, 100, 20, 128)
+    mat2 m = ((1, 0), (0, 1))        readable row tuples
+    mat2 flat = (1, 0, 0, 1)         flat row-major tuple
+    mat2 explicit = mat2(1, 0, 0, 1)
+
+    []                              empty mutable list
+    [1, "Oak", true]                heterogeneous list
+    ()                              empty immutable tuple
+    (1,)                            one-item tuple
+    (1, 2, 3)                       tuple
+    (1 + 2)                         grouping, not a tuple
+
+Lists, tuples, bytes, bytearrays, ranges and strings support zero-based indexing
+and negative indexing from the end. Bytes and bytearray indexing return int.
+    values[0]   values[-1]   values.length   len(values)
+
+Slice forms (start is included, stop is excluded):
+    values[start:stop]               contiguous selection
+    values[start:stop:step]          stride; step defaults to 1
+    values[:]                       shallow copy of the whole collection
+    values[2:]                      from index 2 to the end
+    values[:3]                      first three elements
+    values[::2]                     every second element
+    values[::-1]                    reversed copy
+    values[4:0:-2]                  indices 4 and 2
+Bounds may be expressions, omitted, or null. Negative bounds count from the
+end; out-of-range slice bounds clamp rather than failing. A zero step fails.
+For a negative step, omitted start means the last element and omitted stop
+means before the first element. An explicit stop of -1 instead means the last
+element: values[::-1] reverses, while values[:-1:-1] is empty.
+Slices preserve list/tuple/bytes/bytearray/range/string type. Range slicing is lazy.
+List copies share their element references, but have independent containers.
+String slicing, like indexing, operates on UTF-16 code units.
+
+Slice assignment accepts a list, tuple, bytearray, or string of replacements:
+    values[1:3] = [8, 9, 10]         step 1 may change the collection length
+    values[::2] = (8, 9)             other steps require an exact count
+    values[::-1] = values            replacements snapshot before mutation
+    bytes[1:3] = [0, 255]            validate all bytes before modifying
+Owner and bounds evaluate once, from left to right, before the right-hand side.
+Contiguous insertion with start greater than stop inserts at start.
+Vectors expose writable .x/.y/.z/.w where the dimension permits them.
+Colors expose writable .r/.g/.b/.a. There are no multi-component swizzles.
+Vector components are not accessed with [] and vectors have no .length
+attribute; use len(vector) for component count, length(vector) for magnitude.
+String indexing/length uses UTF-16 code units, not grapheme clusters.
+
+Conversions:
+    int(value)       int, finite float (truncated), bool, decimal string
+    float(value)     int, float, numeric string
+    string(value)    formatted representation
+    bool(value)      validates an existing bool; no implicit truthiness
+    list([value])    materialize an iterable, or construct an empty list
+    tuple([value])   materialize an iterable into an immutable tuple
+    dict([value])    copy a dictionary or consume iterable key/value pairs
+    set([value])     construct a mutable hash set
+    frozenset([value]) construct an immutable hash set
+    bytes([value])   immutable byte copy, zero-filled size, or UTF-8 text
+    bigint(value)    integer, finite float (truncated), bool, or decimal string
+    decimal(value)   decimal, integer, float, or decimal string
+    complex(real[,imag]) construct complex values; .real/.imag are read-only
+    bytearray()      empty mutable bytearray
+    bytearray(size)  size zero-filled bytes; size must be a nonnegative int
+    bytearray(items) copy list/tuple/bytearray integers in 0..255
+    bytearray(text)  UTF-8 encode a string
+Bytearray assignment shares references; bytearray(existing) explicitly copies.
+append/pop also support bytearrays; bytearray + bytearray makes a new array.
+
+Star expansion in calls and collection literals:
+    function(*values)
+    function(first, *values, last, *more)
+    [first, *values, last]
+    (first, *values, last)
+    (*values,)                      comma required for a tuple
+values may be any iterable; dictionaries expand their keys. Each spread
+evaluates and snapshots its source immediately, before the next argument/item.
+Multiple spreads and empty spreads are permitted. Functions, built-ins, aliases
+and type constructors receive the expanded positional arguments and enforce
+their normal count and types. Spread is not a standalone unary operator.
+Receiving *args and **kwargs are described in section 6. **mapping expands a
+dictionary into keyword arguments; its keys must be strings.
+
+BEGIN EXAMPLE: collections.oak
+list values = [10, "Oak", true]
+append(values, 40)
+values[0] = 20
+assert(values[-1] == 40)
+assert(pop(values) == 40)
+assert(len(values) == values.length)
+tuple_value = (1, 2, 3)
+assert(tuple_value[-1] == 3)
+assert(tuple_value[::-1] == (3, 2, 1))
+assert(vec3(*tuple_value) == vec3(1, 2, 3))
+list joined = [0, *tuple_value, 4]
+assert(joined[1:4:2][1] == 3)
+joined[1:3] = [8, 9, 10]
+assert(len(joined) == 6)
+bytearray bytes = bytearray([0, 127, 255])
+assert(bytes[::-1] == bytearray([255, 127, 0]))
+bytes[1:] = (1, 2, 3)
+assert(bytes.length == 4)
+assert(dir(bytes)[0] == "length")
+list converted = list(tuple_value)
+assert(converted[0] == 1)
+assert(int("12") == 12)
+assert(int(2.9) == 2)
+assert(float("2.5") == 2.5)
+assert(bool(true))
+assert(string(12) == "12")
+vec3 original = (1, 2, 3)
+vec3 copied = original
+copied.x = 9
+assert(original.x == 1)
+color red = (255, 0, 0)
+assert(red.a == 255)
+ivec2 signed = (-1, 2)
+uvec3 unsigned = (1, 2, 3)
+quat orientation = (0, 0, 0, 1)
+print(values, signed, unsigned, orientation)
+END EXAMPLE
+
+5. OPERATORS
+------------
+In order from lowest to highest binary precedence:
+    or ||
+    and &&
+    == != < > <= >= in not in is is not
+    |
+    ^
+    &
+    << >>
+    + -
+    * / // %
+    **
+Exponentiation is right-associative: 2 ** 3 ** 2 means 2 ** (3 ** 2).
+Unary operators: + - ~ not !. Unary parsing includes exponentiation, so
+-2 ** 2 means -(2 ** 2). Use parentheses for explicit grouping.
+Boolean operators require bool and short-circuit. Conditions require bool.
+Arithmetic uses bool operands as integers; +true and -true return int.
+/ and ** return float for ordinary int operands. Decimal and complex arithmetic
+retain their types; bigint integer powers stay exact. Integer + - * % remain
+int when both operands are int or bool. Overflow, division by zero and non-finite results fail.
+String + concatenates strings; list + and bytearray + create concatenated copies.
+String % performs percent formatting; numeric % remains arithmetic remainder.
+Numeric comparisons, ordinal string comparisons and equality are supported.
+Vector arithmetic operates on components. Vector-left/scalar-right arithmetic
+is accepted; scalar-left/vector-right supports multiplication. Integer-vector
+operations must produce integral components within the component range.
+Matrix multiplication supports same-size matrices and matching float vectors.
+^ is XOR, & AND, | OR, ~ complement, << and >> shifts. Integer bitwise values
+use sign extension; negative shifts fail. // floors division; % retains Oak's
+truncating remainder convention (-5%3 is -2). bigint arithmetic and nonnegative
+integer powers retain every bit. Ordinary int ** still returns float; use bigint
+for exact large powers. Comparison chains evaluate each operand once and stop
+at the first false comparison. in/not in query membership; is/is not query
+reference identity (including null). Sets support | & ^ -, and subset ordering.
+++ / --, conditional expressions and user-defined operator overloads are absent.
+
+6. CONDITIONS, LOOPS AND FUNCTIONS
+---------------------------------
+    if CONDITION:(
+        STATEMENTS
+    )
+    elif OTHER_CONDITION:(
+        STATEMENTS
+    )
+    else:(
+        STATEMENTS
+    )
+
+    while CONDITION:(STATEMENTS)
+    for item in COLLECTION:(STATEMENTS)
+    break                            exit the current loop
+    continue                         skip to the next iteration
+
+for accepts iterable values, including dictionaries (keys), sets, bytes, ranges
+and generators. Mutable collection iteration uses snapshots. range is lazy:
+range([start,]stop[,step]) includes start and excludes stop, supports indexing,
+slicing, len and membership without constructing a list. Explicit list(range(...))
+or a typed list binding materializes it. for a,b in pairs unpacks each item.
+
+BEGIN EXAMPLE: control.oak
+int total = 0
+for n in range(1, 6):(
+    total += n
+)
+assert(total == 15)
+if total < 10:(
+    print("small")
+)
+elif total == 15:(
+    print("fifteen")
+)
+else:(
+    print("other")
+)
+int count = 0
+while count < 5:(
+    count += 1
+    if count == 2:(continue)
+    if count == 4:(break)
+)
+assert(count == 4)
+assert(range(6, 1, -1)[-1] == 2)
+END EXAMPLE
+
+Function forms:
+    def name(a, b):(STATEMENTS)
+    def name(int a, float b) -> float:(STATEMENTS)
+    def name(first, *args):(STATEMENTS)
+    def name(*args):(STATEMENTS)
+    def name(first, *int args) -> int:(STATEMENTS)
+    def name(first=1, *args, required, optional=2, **kwargs):(STATEMENTS)
+    def name(*, required, optional=2):(STATEMENTS)
+    def name() -> void:(STATEMENTS)
+    return expression
+    return
+
+Typed and untyped parameters may be mixed. Arguments may be positional or named. Functions
+without a receiving rest parameter require an exact expanded count. A final
+*args collects zero or more remaining arguments in an immutable tuple. Required
+parameters before it must still be supplied. Only one receiving rest parameter
+is allowed, and it must be last among positional parameters. Following ordinary
+parameters are keyword-only. In *TYPE args, TYPE describes each element,
+not the tuple: elements are checked/coerced before the function body runs.
+Rest tuples support indexing, slicing, iteration and onward *args expansion.
+Defaults evaluate once when the declaration executes and retain mutable identity.
+Required positional parameters precede default parameters. A bare * introduces
+keyword-only parameters. **kwargs must be last and collects extra string-keyed
+arguments in a dictionary; **TYPE kwargs checks each value. Duplicate keywords,
+duplicate positional/named bindings, missing values and unknown keywords fail.
+Definitions with defaults/decorators execute in source order; ordinary definitions
+retain Oak's block hoisting. lambda parameters: expression makes a closure.
+@decorator above def wraps its callable; multiple decorators apply bottom to top.
+
+BEGIN EXAMPLE: receiving-args.oak
+def total(int first, *int args) -> int:(
+    int result = first
+    for value in args:(result += value)
+    return result
+)
+def capture(*args):(return args)
+assert(total(1) == 1)
+assert(total(1, *[2, 3], 4) == 10)
+assert(capture() == ())
+assert(capture(1, "Oak") == (1, "Oak"))
+print("Total: {}".format(total(1, 2, 3)))
+END EXAMPLE
+Return annotations are optional; declared return types are enforced.
+Functions are available throughout their containing block, support recursion
+and capture lexical scopes. They can be assigned/imported as values.
+Lambdas, generators, yield, exception handling and decorators are implemented.
+Async/await is not implemented. The maximum nested function-call depth is 256.
+
+Optional entry points:
+    def __main__():(...)
+    def __main__(list arguments) -> int:(...)
+    def __main__(*args) -> int:(...)     CLI strings collected in a tuple
+    def draw():(...)
+    def draw(*args):(...)            empty tuple; accepts a zero-argument callback
+
+The runner executes top-level statements, then the entry file's own __main__, then
+the graphics frame loop if a window exists. __main__ returns int or no value.
+An imported module's __main__ is not invoked automatically.
+draw takes no arguments and runs once per frame. An imported draw may be used.
+Built-in globals: args (list of entry arguments), argc (int), script_path
+(current module path), pi (float), delta_time (frame seconds, capped at 0.25),
+and shared render-state objects blend, depth, cull.
+
+BEGIN EXAMPLE: functions.oak
+def add(int a, int b) -> int:(return a + b)
+def factorial(int n) -> int:(
+    if n <= 1:(return 1)
+    return n * factorial(n - 1)
+)
+int calls = 0
+def count_call() -> void:(calls += 1)
+def __main__(list arguments) -> int:(
+    count_call()
+    assert(calls == 1)
+    assert(factorial(5) == 120)
+    operation = add
+    print(operation(2, 3), arguments)
+    return 0
+)
+END EXAMPLE
+
+7. USER TYPES, SCHEMAS AND OPTIONS
+---------------------------------
+    type Name:(TYPE field; TYPE other = DEFAULT)
+    schema Name:(TYPE field = DEFAULT)
+    type Name from SchemaName:(TYPE additional = DEFAULT)
+    schema Name from BaseSchema:(TYPE additional = DEFAULT)
+    readonly TYPE field = DEFAULT
+
+Newlines or semicolons separate fields. Fields are ordered and typed.
+Types are nominal: separate declarations define distinct types.
+Schemas supply reusable fields and are also constructible as records.
+from in a type/schema declaration requires a schema, not class inheritance.
+Duplicate field names fail. readonly fields reject writes after construction.
+Constructors accept positional arguments or one tuple. Omitted trailing fields
+must have defaults. Default expressions run for each instance in the declaration
+scope; they cannot refer to the instance's fields. Mutable defaults are fresh.
+An existing instance passed to its own constructor is returned unchanged.
+Records share references. No methods, generics or record operator overloads.
+
+    options Name:(first;second)
+    options Name:(first, second)
+    extend options Name:(third)
+    Name value = <first>
+
+Newlines, commas or semicolons can separate option names. Duplicate values fail.
+Option sets are nominal, importable and extensible. Extensions apply during
+static compilation even if their containing block does not execute; the set
+must be declared/imported before extension. Options require a declared set or
+an attribute context: untyped value = <first> is not supported.
+GPU attributes have their own fixed allowed option values (section 12).
+
+BEGIN EXAMPLE: records.oak
+options Status:(idle;working)
+extend options Status:(done)
+schema Named:(string name = "Oak")
+type Point:(float x; float y)
+type Document from Named:(
+    readonly int id = 1
+    Point position = (0, 0)
+    Status status = <idle>
+    list notes = []
+)
+Document doc = Document()
+Document other = Document()
+doc.position = (3, 4)
+doc.status = <done>
+append(doc.notes, "First note")
+assert(len(other.notes) == 0)
+assert(doc.position.x == 3)
+Point p = (1, 2)
+Point q = Point(3, 4)
+print(doc, p, q)
+END EXAMPLE
+
+8. IMPORTS, ALIASES AND MODULE INITIALIZATION
+-------------------------------------------
+    from library import *
+    from library import single
+    from library import first;second;third
+    from "file_next_to_this_one.oak" import *
+    from "./sub/library.oak" import value;function_name
+    from "../library.oak" import *
+    from "/relative/path/to/library.oak" import *
+    from "C:/pc/path/to/library.oak" import *
+    from "//server/share/library.oak" import *
+    from "pkg:library" import *
+    from library import value as local_value;add as sum;Point as P
+    from library import * as lib
+
+Named imports consult aliases in oaklibraries.json, then NAME.oak beside the
+importing file, CLI/JSON library search paths, and installed packages in the
+entry project's oak.lock.json. Quoted extensionless paths also gain .oak.
+Library directories may use main.oak. A SINGLE leading / means importer-relative, not
+the current drive root. Drive-qualified and UNC paths are absolute.
+This special leading-/ rule is for imports; it is not a general file-I/O rule.
+Imports and relative assets do not depend on the terminal's current directory.
+pkg: explicitly selects installed package resolution; no network request is
+made by an import. Install dependencies before running the program.
+
+Library configuration: nearest oaklibraries.json, or --libconfig FILE.json:
+    {"aliases":{"mathlib":"lib/renamed.oak"},"libpath":["shared","C:/OakLibraries"]}
+JSON paths resolve beside their JSON file; alias names are case-sensitive.
+    oakscript --libpath "C:/OakLibraries;D:/Extra" program.oak
+    oakscript --libpath "C:/One" --libpath "D:/Two" --check program.oak
+    oakscript compile program.oak --libpath "C:/OakLibraries" -o program.exe
+--libpath accepts directories or individual .oak files. CLI paths resolve
+from the current directory. Valid configured aliases precede local modules;
+local modules precede CLI paths, then JSON paths and installed packages.
+Missing libraries prompt in interactive terminals. Enter a quoted or plain
+.oak path or directory; blank cancels. Selections last for this compilation.
+--prompt-imports forces asking; --no-prompt-imports disables it. Batch/piped
+execution and LSP otherwise report the source location and searched paths.
+exec/evxec imports retain configured search paths. No automatic downloads.
+See docs/LIBRARY_PATHS.md for full resolution details.
+
+Semicolons separate selected exports, not commas. End a selected import with
+a physical newline, closing body or end of file. Do not place an unrelated
+statement after its semicolon on the same physical line.
+* selects top-level module bindings, including re-exports, but not built-ins,
+implicit runtime globals, __init__ or __dispose__ hooks.
+Missing/duplicate/conflicting selections and circular dependencies fail.
+
+Modules have isolated lexical scopes and initialize once, at first executed
+import. Equivalent normalized paths share the cache. Imported bindings are
+live: updating an imported variable or calling a library function that changes
+it is visible to all importers. Imported functions keep the library's scope.
+Imports in functions/blocks remain in that scope. All reachable imports are
+checked before execution, including imports in unexecuted branches/functions.
+An aliased namespace exposes attributes, e.g. lib.value or lib.Point(1, 2).
+Type aliases such as P work in declarations/annotations. lib.Point p = ...
+is not an accepted qualified type declaration; import Point as P instead.
+
+Module hooks:
+    def __init__():(...)
+    def __dispose__():(...)
+Own __init__ runs after a module's top-level statements; imports complete after
+successful initialization. Own __dispose__ runs once in reverse successful
+initialization order when the runner exits, including after program errors.
+Hooks take no arguments. Checks, bytecode dumps and editor analysis never run
+hooks. Re-exporting a hook does not create a hook in the importing module.
+
+BEGIN EXAMPLE: library.oak
+int value = 10
+int starts = 0
+type Point:(float x; float y)
+def add(int a, int b) -> int:(return a + b)
+def __init__():(starts += 1)
+def __dispose__():(print("library disposed"))
+END EXAMPLE
+
+BEGIN EXAMPLE: imports.oak
+from library import value;add as sum;Point as P;starts
+from "./library.oak" import * as lib
+P position = (1, 2)
+assert(sum(2, 3) == 5)
+assert(starts == 1)
+value = 20
+assert(lib.value == 20)
+assert(lib.Point(3, 4).y == 4)
+print(position)
+END EXAMPLE
+
+9. STANDARD LIBRARY - EVERY BUILT-IN
+----------------------------------
+Signature                                    Result / behavior
+
+print(...), println(...)                     void; space-separated line
+input([prompt])                              string; read a console line
+len(value)                                   int; string/list/tuple/bytearray/vector size
+type_of(value)                               string; runtime type name
+dir(value)                                   list of sorted unique attribute names
+range(stop)                                  list; 0 to stop, exclusive
+range(start, stop[, step])                    list; signed integer step
+append(list_or_bytearray, value)              void; append one element
+pop(list_or_bytearray[, index])               removed value; default index -1
+assert(bool_condition[, message])             void; fail when false
+exit([int_code])                              stop program; default 0
+sleep(milliseconds)                          void; nonnegative duration
+time()                                       float; Unix time in seconds
+read_text(path)                              string; read a text file
+write_text(path, text)                        void; overwrite UTF-8 text file
+file_exists(path)                            bool; file exists
+abs(number)                                  int or float
+min(first, second, ...)                       int if all int, otherwise float
+max(first, second, ...)                       int if all int, otherwise float
+sqrt(number)                                 float
+sin(radians), cos(radians), tan(radians)      float
+floor(number), ceil(number), round(number)    float
+pow(base, exponent)                          float
+clamp(number, minimum, maximum)               float
+random()                                     float in [0, 1)
+dot(vec, vec)                                float; matching vec2/3/4 types
+cross(vec3, vec3)                            vec3
+length(vec)                                  float; vec2/3/4 magnitude
+normalize(vec)                               same vec type; rejects zero vector
+transpose(matrix)                            same matrix type
+translate(vec3_offset)                       mat4
+rotate(vec3_euler_degrees)                    mat4
+scale(vec3_factors)                           mat4
+
+All graphics/text/input built-ins are listed in sections 11 and 12.
+Type constructor/conversion forms are listed in sections 4 and 7.
+No implicit degree conversion for sin/cos/tan: use degrees * pi / 180.
+round uses ties-to-even rounding. range rejects zero step and materializes
+at most 10 million elements; use while for larger iterations.
+File I/O in an imported function resolves relative to its defining module.
+write_text does not automatically create parent directories.
+
+dir(value) includes all attribute names, regardless of the attribute's value
+type: ordinary variables, function values, type constructors, schema/option
+exports, resources and reexports. Namespace dir includes lifecycle hooks too;
+it excludes implicit built-ins and globals that are not module exports.
+Records include inherited and readonly fields. dir(record_type) lists its
+declared fields. Resources include schema attributes even when their value
+is not set yet. Vectors/colors list their components; collections list length.
+An empty attribute set returns []. dir does not execute attributes or expose
+the underlying host implementation. Callables/scalars have no Oak attributes
+unless the value is a record constructor. A zero-argument dir() is unsupported.
+    from library import * as lib
+    print(dir(lib))
+    print(dir(create_camera()))
+    print(dir(Point))
+
+BEGIN EXAMPLE: files.oak
+write_text("example-output.txt", "Saved by Oak\n")
+assert(file_exists("example-output.txt"))
+assert(read_text("example-output.txt") == "Saved by Oak\n")
+print(type_of(time()), clamp(15, 0, 10), random())
+END EXAMPLE
+
+10. MATRIX AND ROTATION CONVENTIONS
+----------------------------------
+matrix * vector applies the matrix to a column vector.
+A * B * vector applies B first, then A.
+Rotation helpers and resource rotations use degrees; trigonometry uses radians.
+rotate((pitch, yaw, roll)) constructs the Euler transform using yaw/pitch/roll.
+Camera forward is local +Z, up is +Y; positive camera pitch looks downward.
+Graphics convert values to 32-bit floating point for the GPU.
+
+BEGIN EXAMPLE: math.oak
+mat3 identity = (
+    (1, 0, 0),
+    (0, 1, 0),
+    (0, 0, 1)
+)
+assert(identity * vec3(1, 2, 3) == vec3(1, 2, 3))
+mat4 transform = translate((10, 0, 0)) * scale((2, 2, 2))
+vec4 result = transform * vec4(1, 2, 3, 1)
+assert(result == vec4(12, 4, 6, 1))
+assert(dot(vec3(1, 2, 3), vec3(1, 2, 3)) == 14)
+assert(cross(vec3(1, 0, 0), vec3(0, 1, 0)) == vec3(0, 0, 1))
+assert(length(vec3(3, 4, 0)) == 5)
+assert(abs(sin(90 * pi / 180) - 1) < 0.000001)
+print(result, rotate((0, 45, 0)), normalize(vec3(3, 0, 0)))
+END EXAMPLE
+
+11. WINDOWS, RENDERING, TEXT AND INPUT
+------------------------------------
+    window TITLE_EXPRESSION WIDTH_EXPRESSION HEIGHT_EXPRESSION
+    window "My game" 800 600
+
+Multiple windows are supported. Width/height must be integers in
+1..16384 by default; --nowindimlim bypasses this Oak cap. GPU-supported positive
+32-bit dimensions are still required. When Windows limits a window to the monitor
+size, the full requested
+canvas is kept on the GPU and fitted into the visible preview without stretching.
+Downscaled previews use filtered mipmaps so thin features do not vanish between
+sampled pixels. The canvas starts at (0,0), at the window's top-left corner;
+unused space is on the right or bottom, preserving the aspect ratio. window_size()
+reports the canvas dimensions; captures include pixels outside the desktop's
+visible bounds. An oversized canvas retains its resolution when its preview
+is resized. Ordinary windows continue resizing their canvas with the window.
+mouse_position() maps the preview into canvas coordinates; margins return values
+outside the canvas. mouse_delta() keeps its existing relative-motion behavior.
+Create a window before rendering/input calls. By default the runner
+owns the event/frame loop: put updates and drawing in draw(). Top-level
+rendering commands are replayed before each draw invocation in automatic mode.
+For a manual loop, enable use_render(True) and call render_screen() regularly
+to present changes and process input. Check window_open(handle) to stop on close.
+Closing the window ends the frame loop. 2D pixel origin is top-left; X right,
+Y down. Depth/culling apply to 3D; 2D follows draw order.
+
+Rendering and resources:
+    clear(color)                                  clear frame
+    load_texture(path)                            texture
+    texture_blit(tex, x, y)
+    texture_blit(tex, x, y, width, height[, rotation[, opacity[, tint]]])
+    texture_blit_region(tex, x, y, width, height,
+                        source_x, source_y, source_width, source_height[, tint])
+    fill_poly(points, color_or_texture)
+    set_pixel(x, y, color_tuple_or_color)
+    use_render(enabled)                          manual buffer mode (bool)
+    use_buffer()                                 current mode (bool)
+    render_screen()                              present the manual buffer
+    vertex(position[, uv[, normal[, color]]])      vertex resource
+    create_mesh(vertices[, triangle_indices])      mesh
+    draw_mesh(mesh[, position])
+    load_model(path)                               model
+    draw_model(model[, position])
+    create_camera()                               camera
+    set_camera(camera)
+    create_material()                             material
+    load_shader(base_path)                        shader
+    use_shader(shader)
+    reset_shader()                                restore default shader
+    close_window()
+
+texture_blit rotation is degrees around the destination center; default 0.
+Opacity defaults to 1. Provide both width and height when scaling.
+texture_blit_region source rectangle is in source-image pixels.
+set_pixel(x, y, color) draws exactly one screen pixel in the active window.
+x and y are integers, with (0, 0) at the top-left. Coordinates outside the window
+are ignored. Colors use integer channels from 0 to 255: (r, g, b), (r, g, b, a)
+or a color value. RGB defaults to alpha 255. The current blend.mode controls
+alpha/additive/opaque blending. Pixels use their supplied color, without 3D
+lighting, depth tests or custom shaders. Drawing order is preserved.
+Consecutive pixel calls are batched. In automatic mode, drawing before draw()
+is retained across frames; drawing inside draw() applies to that frame, like
+other primitives.
+
+use_render(true) (or use_render(True)) enables manual buffering for the active
+window. Drawing commands accumulate until render_screen() presents them. The
+previous image remains in the buffer, so new pixels do not erase earlier ones.
+clear(color) explicitly clears it when the queued commands are presented.
+render_screen() also processes window/input events, including in top-level loops.
+use_buffer() reports the current window's mode. use_render(false) or use_render(False)
+restores the existing automatic presentation after each draw() callback.
+In automatic mode render_screen() is a no-op. Modes/buffers are per window.
+Both the runner and native EXEs support these functions. True/False are aliases
+for the existing true/false boolean literals. Bounded --frames/--oak-frames also
+stop explicit rendering loops when the presentation limit is reached.
+
+Manual example:
+    window_handle canvas=create_window("Buffered pixels",320,240)
+    use_render(True)
+    clear((0, 0, 0))
+    for y in range(240):(
+        for x in range(320):(set_pixel(x,y,((x^y)&255,0,0)))
+        render_screen()                          show each finished row
+        if not window_open(canvas):(break)
+    )
+
+Example:
+    window "Pixel example" 320 240
+    def draw():(
+        clear((0, 0, 0))
+        set_pixel(10, 20, (255, 0, 0))
+        set_pixel(11, 20, (0, 255, 0, 128))
+    )
+
+fill_poly takes a list of vec2/2-item tuples for 2D, or explicit vec3 or vertex
+values for 3D. A raw tuple does not select 3D mode: use vec3(x,y,z) or
+vertex((x,y,z)) for each 3D point. Simple convex/concave polygons are supported;
+3D polygons must be planar. Holes and self-intersections are unsupported. There is no
+draw_poly or built-in cube function; use fill_poly or create_mesh.
+Use vertex(...) to provide explicit UVs and colors. UVs are texture coordinates
+such as (0,0)..(1,1). Native geometry stores position, UV and color; normal
+attributes are accepted but are not a separate built-in shader vertex channel.
+Mesh indices are zero-based triples. Without indices, each three vertices
+form a triangle. For model/mesh rotation, assign .rotation = (pitch,yaw,roll).
+An optional draw position overrides the resource's position for that call.
+
+Text:
+    load_font(path[, pixel_size])                  font; default size 32
+    measure_text(text, font_or_path[, pixel_size])  vec2(width,height)
+    draw_text(text, x, y, color, font_or_path[, pixel_size])
+    draw_text2(text, x, y, color, font_or_path[, pixel_size])
+    draw_text3(text, position, facing_target, color, font_or_path
+               [, pixel_size[, world_scale]])
+
+draw_text is an alias for draw_text2. Fonts must be supported .ttf/.otf files.
+World scale defaults to 0.01 world units per pixel. draw_text3 faces its target,
+or the camera when font.billboard is true. See font properties in section 12.
+Text supports Unicode scalar glyphs and kerning. Missing glyphs fail; there
+is no font fallback, complex-script shaping, bidi layout, web font or collection
+support. Wrapping currently uses character boundaries.
+
+Input and window queries (all require a window):
+    key_down(name)                                bool; currently held
+    key_pressed(name)                             bool; pressed this frame
+    key_released(name)                            bool; released this frame
+    mouse_down(name), mouse_pressed(name), mouse_released(name)  bool
+    mouse_position()                              vec2; window pixels
+    mouse_delta()                                 vec2; relative frame motion
+    mouse_wheel()                                 float; frame wheel delta
+    lock_mouse(bool)                              hide/capture or release cursor
+    mouse_locked()                                bool
+    window_focused()                              bool
+    window_size()                                 vec2(width,height)
+
+Key examples: "A".."Z", "Number0".."Number9", "Space", "Enter", "Escape",
+"Left", "Right", "Up", "Down", "LShift"/"ShiftLeft", "RShift"/"ShiftRight".
+Key names are case-insensitive. Mouse names: "Left", "Middle", "Right",
+"Button1".."Button9". Press/release queries include complete between-frame
+taps; auto-repeat is not a new press while held. Queries do not consume edges.
+Focus loss releases relative capture and clears held input automatically.
+
+BEGIN EXAMPLE: graphics2d.oak
+window "Oak - WASD square" 800 600
+vec2 player = (350, 250)
+def draw():(
+    float speed = 200 * delta_time
+    if key_down("LShift"):(speed *= 0.5)
+    if key_down("A"):(player.x -= speed)
+    if key_down("D"):(player.x += speed)
+    if key_down("W"):(player.y -= speed)
+    if key_down("S"):(player.y += speed)
+    if key_pressed("Space"):(player = (350, 250))
+    clear((20, 28, 38))
+    fill_poly([
+        (player.x, player.y), (player.x + 48, player.y),
+        (player.x + 48, player.y + 48), (player.x, player.y + 48)
+    ], (90, 210, 120))
+    if key_pressed("Escape"):(close_window())
+)
+END EXAMPLE
+
+BEGIN EXAMPLE: graphics3d.oak
+window "Oak - rotating triangle" 800 600
+camera view = create_camera()
+view.position = (0, 0, -5)
+mesh triangle = create_mesh([
+    vertex((-1, -1, 0), (0, 0), (0, 0, -1), (255, 80, 80)),
+    vertex((1, -1, 0), (1, 0), (0, 0, -1), (80, 255, 120)),
+    vertex((0, 1, 0), (0.5, 1), (0, 0, -1), (80, 140, 255))
+], [0, 1, 2])
+material surface = create_material()
+surface.color = (255, 255, 255)
+triangle.material = surface
+def draw():(
+    triangle.rotation.y += 45 * delta_time
+    clear((20, 28, 38))
+    set_camera(view)
+    draw_mesh(triangle)
+    fill_poly([vec3(1.5, -1, 0), vec3(3, -1, 0), vec3(2, 1, 0)], (240, 180, 60))
+    if key_pressed("Escape"):(close_window())
+)
+END EXAMPLE
+
+BEGIN EXAMPLE: textures.oak
+window "Oak - image texture" 800 600
+texture picture = load_texture("assets/checker.png")
+picture.filter = <nearest>
+picture.wrap = <repeat>
+picture.mipmap = true
+float angle = 0
+def draw():(
+    angle += 20 * delta_time
+    clear((20, 28, 38))
+    texture_blit(picture, 80, 100, 240, 240, angle, 1, (255, 255, 255))
+    texture_blit_region(picture, 400, 100, 200, 200,
+                        0, 0, picture.width, picture.height)
+    if key_pressed("Escape"):(close_window())
+)
+END EXAMPLE
+
+BEGIN EXAMPLE: text.oak
+window "Oak - text" 800 600
+font label = load_font("assets/AtkinsonHyperlegible-Regular.ttf", 28)
+label.spacing = 1
+label.wrap_width = 700
+label.align = <left>
+camera view = create_camera()
+def draw():(
+    clear((20, 28, 38))
+    set_camera(view)
+    draw_text3("World label", (-1, 0, 0), view.position,
+               (255, 230, 150), label, 28, 0.01)
+    draw_text("Hello, Oak!", 40, 40, (255, 255, 255), label)
+    draw_text2("Size: " + string(measure_text("Hello, Oak!", label)),
+               40, 100, (150, 210, 255), label, 20)
+    if key_pressed("Escape"):(close_window())
+)
+END EXAMPLE
+
+12. EVERY BUILT-IN ATTRIBUTE AND GPU OPTION
+------------------------------------------
+Attribute syntax is object.name; assignment is object.name = expression.
+Attributes are checked by resource type. Unknown attributes fail.
+
+texture:
+    width, height : int       default blit dimensions; does not resize pixels
+    name : string
+    position : vec3           metadata
+    filter : <nearest|linear> default linear
+    wrap : <repeat|clamp|mirror> default clamp
+    repeat : bool             default false; true forces repeat wrapping
+    mipmap : bool             default false; real GPU mipmaps
+    anisotropic : float       1..16; default 1
+model and mesh:
+    position : vec3           default (0,0,0)
+    rotation : vec3           Euler degrees; default (0,0,0)
+    scale : vec3              default (1,1,1)
+    name : string
+    material : material       optional override; initially unset
+material:
+    texture : texture         optional; initially unset
+    color : color             default (255,255,255,255)
+    roughness : float         0..1, default 1; stored, not default-shader lighting
+    metallic : float          0..1, default 0; stored, not default-shader lighting
+    name : string
+camera:
+    position : vec3           default (0,0,-5)
+    rotation : vec3           Euler degrees; default (0,0,0)
+    fov : float               degrees, 0 < fov < 180; default 70
+    near : float              positive; default 0.01
+    far : float               must exceed near; default 1000
+shader:
+    name : string
+vertex:
+    position : vec3
+    uv : vec2                 default (0,0)
+    normal : vec3             default (0,0,1); retained attribute
+    color : color             default (255,255,255,255)
+font:
+    name : string             read-only filename
+    size : float              2..256 pixels; default 32; rasterized at ceil(size)
+    scale : float             positive; default 1
+    spacing : float           extra advance pixels; default 0
+    line_spacing : float      positive height multiplier; default 1.2
+    wrap_width : float        nonnegative pixels; default 0 (disabled)
+    align : <left|center|right> default left
+    opacity : float           0..1; default 1
+    rotation : float          degrees; default 0
+    billboard : bool          camera-facing 3D labels; default false
+    depth_test : bool         3D text depth testing; default true
+list, tuple, string:
+    length : int              read-only
+vec2/3/4, ivec2/3/4, uvec2/3/4, quat:
+    x, y, z, w                dimension permitting; writable components
+color:
+    r, g, b, a                writable integer components
+
+Global render-state objects:
+    blend.mode = <alpha>      choices alpha, additive, opaque
+    depth.mode = <less>       choices less, less_equal, greater, always, none
+    cull.mode = <none>        choices front, back, none
+These are the initial states. An option is valid only for its receiving
+attribute: texture.wrap = <linear> and texture.width = <nearest> fail.
+User option sets do not extend these renderer-defined choices.
+
+Material example (place in a program after loading a texture/creating a mesh):
+    material surface = create_material()
+    surface.texture = picture
+    surface.color = (255, 255, 255)
+    triangle.material = surface
+    triangle.position = (0, 0, 2)
+    triangle.rotation = (0, 45, 0)
+    triangle.scale = (2, 2, 2)
+
+13. ASSETS AND CUSTOM SHADERS
+---------------------------
+Paths resolve beside the source file whose code makes the call, including
+inside imported functions. Use a quoted path in load_texture/load_model/
+load_font/load_shader/read_text/write_text/file_exists.
+Textures support PNG, JPEG, BMP, TGA and other stb-supported image formats;
+extensionless texture paths try common extensions.
+Models support OBJ/basic MTL and static glTF 2.0/GLB triangle geometry,
+node transforms, vertex colors, base-color materials and textures.
+Animations/skinning are not implemented.
+
+Geometry stays unlit with no active lights. Adding light objects enables
+the built-in diffuse lighting/shadow shader for 3D geometry, using supplied
+or derived face normals. Roughness/metallic do not implement PBR. Oak Blocks
+retains its custom directional-light/AO/fog shader. See the lighting reference
+below for the general light-object and GPU-shadow APIs.
+
+    shader custom = load_shader("assets/shaders/custom")
+    use_shader(custom)
+    // draw geometry here
+    reset_shader()
+
+The loader reads base_path.vert.spv and base_path.frag.spv. A directory path
+instead reads oak.vert.spv and oak.frag.spv within that directory.
+Shaders are precompiled SPIR-V. Runtime GLSL compilation and arbitrary uniform
+APIs are not implemented; the Vulkan SDK is needed only when compiling GLSL.
+Vertex ABI: location 0 vec3 position; location 1 vec2 UV; location 2 vec4 color;
+optional location 3 vec3 normal. Existing shaders using locations 0..2 still work.
+Set 0 binding 0: mat4 transform. Set 1 binding 0: texture; binding 1: sampler.
+Consult Oak Blocks' assets/shaders for actual vertex/fragment GLSL and SPIR-V.
+All shaders/resources are scoped to the program and cleaned up on exit.
+
+The asset-dependent examples above expect:
+    textures.oak: assets/checker.png (supply any PNG under that filename)
+    text.oak: assets/AtkinsonHyperlegible-Regular.ttf
+The font and its OFL.txt license are included in the Oak Blocks release;
+keep the license with the font when copying it into another project.
+
+14. PACKAGES AND REGISTRIES
+--------------------------
+A package folder contains oakpackage.json, for example:
+    {
+      "name": "oakmath",
+      "version": "1.0.0",
+      "entry": "main.oak",
+      "dependencies": {"other_library": "2.1.0"}
+    }
+
+Names start with a lowercase letter and contain lowercase letters, digits or
+underscores. Versions are exact major.minor.patch. Entry is a relative .oak
+path using forward slashes. dependencies may be omitted when there are none.
+
+    oakscript pkg pack FOLDER [OUTPUT.oakpkg]
+    oakscript pkg publish FOLDER LOCAL_REGISTRY
+    oakscript pkg install NAME VERSION --registry PATH_OR_URL [--project FOLDER]
+    oakscript pkg list [PROJECT]
+
+For example:
+    oakscript pkg pack ./oakmath oakmath-1.0.0.oakpkg
+    oakscript pkg publish ./oakmath C:/my-oak-registry
+    oakscript pkg install oakmath 1.0.0 --registry C:/my-oak-registry --project .
+    oakscript pkg install oakmath latest --registry https://your-host/registry
+    from "pkg:oakmath" import *
+
+publish writes a local registry, which may be served over HTTP/HTTPS. It does
+not upload to a hosted public registry. Existing versions cannot be overwritten.
+pack produces a deterministic ZIP archive for unchanged inputs. Installation
+validates package identity, SHA-256, archive paths and exact dependencies, then
+writes oak.lock.json atomically. Keep that lock with your project; install
+dependencies on each computer before running. Dependency cycles/conflicts fail.
+Cache: %LOCALAPPDATA%/OakScript/packages; OAKSCRIPT_HOME overrides its location.
+Limits: 64 MiB archive, 512 MiB expanded, 10,000 entries per archive.
+No semver ranges, registry accounts/signatures or remote publish command.
+
+15. EDITOR INTEGRATION
+---------------------
+    oakscript lsp
+Starts the Language Server Protocol server over stdin/stdout. It provides
+diagnostics, completion, hover, definitions and document symbols. Analysis
+never executes code or module hooks. It reports the first compiler error and
+uses UTF-16 positions with full-document synchronization.
+The separately built VS Code extension also supplies .oak highlighting and
+Run File / Check File commands. The extension is not required to run scripts.
+Rename, formatting, debugger and refactoring support are not implemented.
+
+16. LEARNING FROM OAK BLOCKS
+---------------------------
+Download OakBlocks.zip from this repository's Releases page. Extract the
+complete folder. Play.cmd launches the game; Textures.cmd launches its gallery.
+All main.oak, texture-demo.oak, test.oak and lib/*.oak sources are included.
+
+Read the files in this order:
+    main.oak               imports, window, setup and draw callback
+    lib/game.oak           game state, mode changes and update orchestration
+    lib/input.oak          keyboard/mouse handling
+    lib/physics.oak        movement, collisions, jumping, crouching and flight
+    lib/world.oak          voxel storage and terrain
+    lib/raycast.oak        block selection
+    lib/textures.oak       actual PNG resources and material selection
+    lib/meshing.oak        visible-face meshes and texture grouping
+    lib/render.oak         camera, world, shader and UI drawing
+    assets/shaders/        GLSL source and compiled SPIR-V
+    texture-demo.oak       isolated textured 3D gallery
+    test.oak               headless game checks
+
+    .\oakscript.exe test.oak
+    .\oakscript.exe --check main.oak
+    .\oakscript.exe --frames 4 --capture frame.png main.oak
+
+Controls: Enter starts/resumes; WASD moves; Space jumps; Shift crouches;
+F toggles flight (Space up/Shift down); mouse looks; left click breaks;
+right click places; 1-8 or wheel selects; Escape pauses; R respawns;
+Q quits while paused. Keep all assets/libraries with the game sources.
+This is a finite creative sandbox with session-only builds, without world
+saving, multiplayer or survival systems. It is an example of the current API.
+
+
+OAKSCRIPT 0.7.0 - AUDIO, MATH, WINDOWS, COMPUTE AND LIGHTING
+
+This reference supplements the core syntax in SYNTAX.txt. The APIs are general
+runtime facilities; none depend on Oak Blocks or other game-specific code.
+All source resource paths resolve beside the calling Oak module.
+
+MATRIX MATH
+
+Matrices store rows and multiply column vectors. A*B*v applies B, then A.
+GPU projections use +Z forward, +Y up and depth 0..1. All rotation and field
+of view angles are degrees. Euler vectors mean (pitch X, yaw Y, roll Z),
+composed as rotation_y(y)*rotation_x(x)*rotation_z(z).
+
+    inverse(mat2|mat3|mat4) -> same matrix type
+    determinant(mat2|mat3|mat4) -> float
+    matrix_multiply(matrix, matrix, ...) -> same matrix type
+    perspective(fov_degrees, aspect, near, far) -> mat4
+    orthographic(left, right, bottom, top, near, far) -> mat4
+    look_at(eye_vec3, target_vec3, up_vec3) -> mat4
+    rotation_x(degrees) -> mat4
+    rotation_y(degrees) -> mat4
+    rotation_z(degrees) -> mat4
+    rotation_axis(axis_vec3, degrees) -> mat4
+    decompose(mat4) -> (translation_vec3, rotation_quat, scale_vec3)
+
+inverse/determinant use double precision and partial-pivot elimination.
+Singular inverse, invalid projection bounds and degenerate look-at directions
+are errors. decompose supports affine translation/rotation/scale, including
+a reflection represented by a negative X scale. It rejects zero scale, shear
+and perspective transforms. matrix_multiply operands must have equal sizes.
+
+    mat4 transform=translate((10,0,0))*scale((2,2,2))
+    vec4 result=transform*vec4(1,2,3,1) \# (12,4,6,1) #\
+    vec4 original=inverse(transform)*result
+    parts=decompose(transform)
+    vec3 position=parts[0]
+    quat orientation=parts[1]
+    vec3 size=parts[2]
+
+QUATERNIONS
+
+Ordering stays x,y,z,w; identity is quat(0,0,0,1). Quaternion products use
+Hamilton multiplication: qA*qB*v applies qB first, then qA. Scalar products
+scale components. q*vec3 rotates a vector using the normalized quaternion.
+
+    quat_multiply(quat, quat) -> quat          // same as qA*qB
+    quat_normalize(quat) -> quat              // normalize(q) also works
+    quat_inverse(quat) -> quat                // inverse(q) also works
+    conjugate(quat) -> quat
+    quat_rotate(quat, vec3) -> vec3            // same as q*v
+    quat_slerp(first, second, amount) -> quat
+    quat_nlerp(first, second, amount) -> quat
+    quat_from_euler(pitch_yaw_roll_vec3) -> quat
+    quat_to_euler(quat) -> vec3
+    quat_from_axis_angle(axis_vec3, degrees) -> quat
+    quat_to_matrix(quat) -> mat4
+    quat_from_matrix(mat3|mat4) -> quat
+
+Interpolation normalizes endpoints and uses the shortest rotational arc;
+amount must be 0..1. Axis and quaternion normalization require nonzero values.
+Matrix conversion expects an orthonormal proper rotation; decompose a scaled
+matrix first. Euler output uses a canonical representative; at gimbal lock
+roll is set to zero. Equivalent rotations can have different Euler values.
+
+    quat turn=quat_from_axis_angle((0,1,0),90)
+    vec3 right=turn*vec3(0,0,1) \# approximately (1,0,0) #\
+    quat halfway=quat_slerp(quat(0,0,0,1),turn,0.5)
+
+GENERAL AUDIO
+
+Audio initializes only when requested and does not require a window or GPU.
+The bundled SDL2 backend produces 48000 Hz stereo floating-point output;
+SDL converts to the device format when necessary. Each playback voice is an
+independent channel with its own controls. Files can be mono or stereo WAV:
+PCM 8/16/24/32-bit or IEEE float32, at 8000..192000 Hz. Compressed MP3/OGG
+decoding, recording, DSP effects and device selection are not implemented.
+
+    load_sound(path_string) -> sound
+    load_music(path_string) -> music
+    play_sound(sound[, audio_bus]) -> audio_voice
+    play_music(music[, audio_bus]) -> audio_voice
+    stop_audio([audio_voice]) -> void     // omitted: stop all voices
+    pause_audio(audio_voice) -> void
+    resume_audio(audio_voice) -> void
+    audio_master() -> audio_bus
+    create_audio_bus(name_string[, parent_audio_bus]) -> audio_bus
+    route_audio_bus(bus, parent_bus) -> void
+    set_listener(position_vec3[, forward_vec3[, up_vec3]]) -> void
+    audio_status() -> string
+
+sound/music writable attributes (defaults copied into a new playback voice):
+    .volume float >= 0; default 1
+    .pitch float 0.01..8; default 1 (rate multiplier, also changes duration)
+    .loop bool; default false
+    .pan float -1..1; default 0 (-1 left, +1 right)
+    .position vec3; default (0,0,0)
+    .spatial bool; default false
+    .min_distance float > 0; default 1
+    .max_distance float > min_distance; default 100
+    .rolloff float >= 0; default 1
+    .attenuation = <inverse> | <linear> | <none>; default <inverse>
+Read-only sound/music attributes:
+    .name string; .duration float seconds; .channels int (1 or 2)
+    .sample_rate int; .streaming bool
+
+audio_voice has the writable sound controls plus .bus (audio_bus).
+Its .playing bool, .paused bool and .time float seconds are read-only.
+Pausing keeps .playing true; stop/end-of-file sets it false. Paused voices
+do not advance. Finished voices cannot be resumed; start another playback.
+audio_bus has .volume float >= 0, .mute bool and read-only .name string.
+Parents multiply gains; the master affects all descendants. Routing cycles
+are errors and the master cannot be rerouted. Bus names are nonempty/unique.
+
+Ordinary stereo preserves independent left/right channels. Mono and spatial
+voices use equal-power panning. Spatial playback folds stereo to mono and
+computes pan from the listener's position/orientation. Default listener is
+position (0,0,0), forward (0,0,1), up (0,1,0). Forward and up must be nonzero
+and nonparallel. Inverse attenuation is min/(min+rolloff*(distance-min));
+linear attenuation is (1-(distance-min)/(max-min))**rolloff. Both retain full
+gain within min and become silent at/beyond max. <none> disables distance
+attenuation. Output mixing clamps to -1..1 to avoid clipping overflow.
+
+load_sound decodes the complete sound (at most 512 MiB). load_music reads
+metadata and keeps two 4096-frame file blocks per playback voice; it does
+not decode the entire track. Decoding/resampling/mixing run on an audio
+producer thread, independent of graphics. Streaming assumes its WAV stays
+available and unchanged. Device/stream failures are reported by audio_status
+and subsequent playback operations. The runner closes audio on exit.
+
+    audio_bus effects=create_audio_bus("effects")
+    effects.volume=0.5
+    sound hit=load_sound("assets/audio/chime.wav")
+    audio_voice voice=play_sound(hit,effects)
+    voice.spatial=true
+    voice.position=(2,0,2)
+    voice.attenuation=<inverse>
+    voice.pitch=1.25
+    sleep(1000)
+    stop_audio(voice)
+
+MULTIPLE WINDOWS
+
+    create_window(title_string, width_int, height_int) -> window_handle
+    active_window() -> window_handle
+    set_window(window_handle) -> void
+    window_open(window_handle) -> bool
+    windows() -> list of currently open window handles
+    close_window([window_handle]) -> void
+    graphics_stats() -> list
+
+The existing window "Title" width height statement creates/selects a window;
+repeating it creates another. create_window also selects its new window.
+Each window owns a Vulkan device, swapchain, framebuffer, camera, lights,
+shader state, frame resources and keyboard/mouse state. Rendering and input
+queries target the selected window. draw() runs once per application frame;
+select each desired window and issue its commands in that callback. A window
+created during draw joins the next frame. Native close or close_window closes
+only that window. Execution stops when every window closes or --frames ends.
+Relative mouse capture has one owner at a time, matching SDL's device model.
+close_window releases capture and hides the window. Closed handles cannot be
+selected again. GPU resources remain owned until interpreter cleanup so live
+compute resources may continue to refer to their original device.
+--capture captures the first window created, even if another is selected.
+
+graphics_stats indices: 0 completed frames; 1 buffer uploads; 2 texture uploads;
+3 graphics pipeline count; 4 cached surface descriptor count; 5 shadow face
+passes. Counts help inspect upload/pipeline reuse and are per window.
+
+    window_handle first=create_window("First",640,480)
+    window_handle second=create_window("Second",400,300)
+    def draw():(
+        if window_open(first):(set_window(first); clear((30,65,100)))
+        if window_open(second):(set_window(second); clear((65,100,30)))
+    )
+
+GPU COMPUTE
+
+Compute uses the selected window's Vulkan device if the first compute call
+occurs after window creation. Otherwise it creates a headless Vulkan device.
+The compute context remains on that device when the selected window changes.
+Shader/resource handles must belong to the same interpreter compute context.
+No compute call needs game objects, a world, camera or rendering callback.
+
+    load_compute_shader(path_string) -> compute_shader
+    create_buffer(element_count_int | list[, format_string]) -> gpu_buffer
+    write_buffer(buffer, list[, element_offset_int]) -> void
+    read_buffer(buffer[, element_offset_int[, count_int]]) -> list
+    create_image(width_int, height_int[, format_string]) -> gpu_image
+    write_image(image, list) -> void
+    read_image(image) -> list
+    dispatch(shader, bindings_list, groups_x[, groups_y[, groups_z]]) -> void
+    compute_wait() -> void
+    compute_texture(image) -> texture
+    snapshot_texture(image) -> texture
+    save_image(image, path_string) -> void
+
+Buffer format is "float" (default), "int" or "uint", all 32-bit. Input lists
+initialize values; element counts initialize zeros. Buffers have read-only
+.count int and .format string. Bounds and integer ranges are checked. Maximum
+buffer allocation is 1 GiB (268435456 elements). Float32 values must be finite.
+read_buffer returns Oak float for float32, Oak int for int32/uint32.
+
+Image format is "rgba8" (default) or "r32f". Images expose read-only .width,
+.height ints and .format string. Dimensions are 1..16384, at most 1 GiB of
+pixels. Rows are top-to-bottom. rgba8 read/write lists contain R,G,B,A integer
+bytes 0..255 for each pixel. r32f lists contain one float per pixel. Images
+start at zero. save_image writes a PNG from rgba8 via explicit GPU readback.
+
+dispatch group counts are 1..65535 in each dimension; defaults y/z=1. Local
+workgroup sizes come from the shader, so 64 invocations per group means a
+64-thread local size, not 64 groups. Shader code must bounds-check extra
+invocations when image/buffer dimensions are not a whole number of groups.
+Dispatch is asynchronous and queue ordered. read_buffer/read_image/save_image,
+snapshot_texture and compute_wait wait for their requested results. Explicit
+image writes order against earlier jobs. Pipelines and descriptor sets cache
+by shader/binding layout and handles; identical shader paths load once.
+
+Shaders are compiled SPIR-V (.comp.spv), entry "main", with literal
+local_size_x/y/z. Use GLSL #version 450, one descriptor set (set=0), sequential
+bindings matching the Oak bindings list. Each buffer is a std430 read/write
+storage buffer; each image is a formatted read/write storage image. Uniform
+buffers, samplers, indirect dispatch and runtime GLSL compilation are not
+part of this API. Write uniforms as small storage buffers when needed.
+
+    // GLSL, compile: glslc square.comp -o square.comp.spv
+    #version 450
+    layout(local_size_x=64) in;
+    layout(set=0,binding=0,std430) buffer Data { float values[]; };
+    void main() {
+        uint i=gl_GlobalInvocationID.x;
+        if(i<values.length()) values[i]*=values[i];
+    }
+
+    compute_shader kernel=load_compute_shader("assets/shaders/square.comp.spv")
+    gpu_buffer values=create_buffer([1,2,3,4])
+    dispatch(kernel,[values],1)
+    println(read_buffer(values)) \# [1,4,9,16] (float values) #\
+
+compute_texture exposes an rgba8 storage image directly to graphics on its
+owning window/device; mutations by later dispatches appear without CPU
+readback or texture re-upload. It has one mip level. A texture belonging to
+another device cannot be drawn directly: snapshot_texture returns a CPU
+snapshot usable by any window, including a window opened after headless
+compute. Reuse the same image/texture handles for per-frame effects.
+
+LIGHTING AND GPU SHADOWS
+
+    create_light() -> light
+    add_light(light) -> void
+    remove_light(light) -> void
+    clear_lights() -> void
+    use_lighting(bool) -> void
+    set_ambient(color[, intensity_number]) -> void
+
+Light objects are general resources. A window maintains its own active list;
+adding the same object again is harmless. The same light can be added to
+multiple windows. Mutating its attributes updates subsequent frames.
+
+    .type = <directional> | <point> | <spot>; default <directional>
+    .position vec3; default (0,0,0)
+    .direction vec3 nonzero; default (0,-1,1), automatically normalized
+    .color color; default (255,255,255,255)
+    .intensity float >= 0; default 1
+    .range float > 0.02; default 100
+    .inner_angle float degrees 0..<90; default 20
+    .outer_angle float degrees 0..<90; default 30
+    .cast_shadows bool; default false
+    .shadow_bias float >= 0; default 0.001 (normalized light-depth units)
+    .shadow_extent float > 0; default 40 (directional map world width)
+    .shadow_near float > 0; default 0.1 (point/spot shadow projection)
+    .shadow_filter = <hard> | <pcf>; default <pcf>
+
+For spots, require 0 <= inner_angle <= outer_angle < 90 and outer_angle > 0.
+The angles are cone HALF-angles. Point/spot range controls attenuation and
+the shadow far plane; shadow_near must be less than range. Point attenuation
+is (1-distance/range)**2/(1+distance**2), clipped at range. Spot cones smoothly
+interpolate between inner and outer cone edges. Direction is where rays
+travel; directional illumination arrives from its negative. Directional
+position centers its orthographic shadow volume, extent sets its world width,
+and range sets coverage along its direction. Configure these for your scene.
+
+3D meshes/models/polygons use diffuse Lambert lighting when the selected
+window has lights and lighting is enabled. Vertex normals are transformed
+with the inverse transpose; missing normals fall back to fragment derivatives.
+2D graphics, text and existing custom shader programs retain their own
+appearance. Existing programs with no active lights retain their unlit
+behavior. roughness/metallic and normal-map textures do not implement PBR.
+
+Shadow casters are submitted 3D mesh/model/polygon geometry with lighting
+enabled. The GPU renders depth maps before the lit color pass. Directional
+and spot lights use one map; point lights use six perspective cube faces.
+The fragment shader projects world positions into those maps and compares
+depth, with slope-aware receiver bias and receiver-plane PCF correction.
+<pcf> uses 3x3 taps; <hard> uses one. Alpha below 0.5 in a caster's texture
+is discarded in its shadow pass. Custom shaders may cast but must supply
+their own lighting/shadow sampling if they replace the built-in color shader.
+
+Each window supports at most 16 active lights and 32 shadow faces, packed
+into a 4096x2048 depth atlas (512x512 per face). Exceeding these bounds is an
+explicit error; no lights or shadows are silently dropped. There are no
+cascades, dynamic shadow resolution, soft area lights or ray-traced shadows.
+
+    light sun=create_light()
+    sun.type=<directional>
+    sun.direction=(0.5,-1,0.5)
+    sun.cast_shadows=true
+    sun.shadow_filter=<pcf>
+    add_light(sun)
+    set_ambient((255,255,255),0.15)
+
+FRAME PERFORMANCE
+
+Each Vulkan window uses three frame contexts and fences. A context waits
+only before reusing its in-flight buffers/command list; there is no
+WaitForIdle per frame. Resize/capture/cleanup wait for resources they must
+replace or read; device idle is reserved for final device disposal.
+Immutable mesh/index arrays, tint results, unchanged transform uniforms,
+presentation quads, SPIR-V shader objects, pipelines, samplers and surface
+descriptors are cached. Texture revision changes create a replacement image;
+older versions are retired after a covering frame fence. Mipmaps generate
+once per upload rather than every draw. Immediate polygons/text remain
+dynamic data and upload when rebuilt. Make meshes once for repeated geometry.
+
+RUNNABLE EXAMPLES
+
+    oakscript examples/advanced-math.oak
+    oakscript examples/audio.oak
+    oakscript examples/compute.oak
+    oakscript examples/graphics-compute.oak
+    oakscript examples/graphics-windows.oak
+    oakscript examples/graphics-lighting.oak
+
+graphics-lighting controls: 1 directional, 2 point, 3 spot, S shadow toggle,
+Escape close. Compute and graphics need Vulkan. Audio uses the system output
+device. All examples ship with their shaders/audio assets, so users do not
+need glslc or other development tools to run them.
+
+COLLECTIONS, UNPACKING AND COMPREHENSIONS
+
+    dict mapping={"first":1,"second":2}
+    mapping["third"]=3
+    del mapping["first"]
+    dict merged={**mapping,"fourth":4}
+    set unique={1,2,2,3}
+    set empty=set()
+    frozenset immutable=frozenset([1,2])
+    bytes data=bytes([0,127,255])
+
+{} is an empty dictionary. Dict keys and set members must be immutable:
+null, numbers, strings, immutable bytes, recursively immutable tuples,
+frozensets, and option values. Mutable collections and records are unhashable.
+Numerically equal keys (true, 1, 1.0, bigint(1), decimal("1"), complex(1))
+identify the same entry. Integers are compared exactly against floats;
+9007199254740993 differs from 9007199254740992.0.
+Dictionary iteration visits keys in insertion order. Replacing a value retains
+its position; deleting and reinserting moves the key to the end. Set iteration
+has no ordering guarantee. Mutation during iteration does not alter its captured
+collection snapshot. List/tuple/dict/set conversions consume finite iterables.
+
+    dict([("a",1),("b",2)])
+    mapping.get(key[, default]) -> value or null/default
+    mapping.setdefault(key[, default]) -> existing or inserted value
+    mapping.pop(key[, default]) -> removed value; missing key raises KeyError
+    mapping.update(mapping_or_pairs) -> void
+    mapping.keys() -> list of keys
+    mapping.values() -> list of values
+    mapping.items() -> list of (key,value) tuples
+    mapping.copy() -> shallow dict copy
+    mapping.clear() -> void
+
+    unique.add(value) -> void
+    unique.discard(value) -> void; absent members are ignored
+    unique.remove(value) -> void; absent members raise KeyError
+    unique.pop() -> arbitrary removed member
+    unique.update(*iterables) -> void
+    unique.clear() -> void
+    unique.copy() -> shallow copy
+    unique.union(*iterables) -> new set
+    unique.intersection(*iterables) -> new set
+    unique.difference(*iterables) -> new set
+    unique.symmetric_difference(iterable) -> new set
+    unique.issubset(iterable) -> bool
+    unique.issuperset(iterable) -> bool
+    unique.isdisjoint(iterable) -> bool
+
+frozenset has the non-mutating methods; copies/algebra retain frozenset when
+the left operand is frozen. Set operators |, &, ^, - mean union, intersection,
+symmetric difference, difference. < <= > >= compare proper/nonproper subsets.
+Dict/set .length and len() report size. bytes copies a bytearray or iterable
+of integers 0..255, supports indexing/slicing/iteration, and cannot be mutated.
+bytes(text) UTF-8 encodes a string. Use bytearray for writable byte sequences.
+
+    a,b=(1,2)
+    head,*middle,tail=[1,2,3,4]
+    a,(b,*rest)=(1,(2,3,4))
+    for key,value in mapping.items():(println(key,value))
+    squares=[x*x for x in range(10) if x%2==0]
+    pairs=[(x,y) for x in range(2) for y in range(3)]
+    lookup={x:x*x for x in range(4)}
+    distinct={x%3 for x in range(10)}
+    lazy=(x*x for x in range(1000000000) if x>0)
+
+Unpacking accepts nested tuple/list targets, indices, and attributes. One
+starred target per level collects the remaining values in a list. An incorrect
+count raises ValueError. Comprehension names are local to each iteration.
+Multiple for clauses and multiple if filters run left to right. Generator
+expressions capture the outer iterable at construction and defer element and
+inner-clause evaluation until next().
+
+RECOVERABLE ERRORS AND CONTEXT MANAGERS
+
+    try:(
+        value=1/0
+    )
+    except ZeroDivisionError as error:(
+        println(error.name,error.message,error.file,error.line,error.column)
+    )
+    except (ValueError,TypeError):(
+        println("another handled error")
+    )
+    else:(println("body completed without an error"))
+    finally:(println("cleanup"))
+
+    raise ValueError("bad input")
+    raise ValueError
+    raise
+
+Handlers run in source order; a bare except catches any Oak error. Exception
+catches all built-in exception types. else runs only when the body completes
+normally, including no return/break/continue. finally runs during errors,
+returns, loop control and generator closure. A return/error in finally can
+replace the pending return/error. Bare raise rethrows the current error and
+raises RuntimeError outside an active handler. Cancellation and exit() remain
+process/control signals and are not swallowed by except.
+
+Exception constructors accept an optional message:
+    Exception([message])
+    RuntimeError([message])
+    ValueError([message])
+    TypeError([message])
+    ZeroDivisionError([message])
+    OverflowError([message])
+    KeyError([message])
+    IndexError([message])
+    IOError([message])
+    StopIteration([message])
+    AssertionError([message])
+    ImportError([message])
+    SyntaxError([message])
+    NameError([message])
+    exception_type(name_string[, parent_exception_type]) -> exception type
+
+Errors expose readonly .type, .name, .message, .category, .file, .line, .column.
+Static errors in the initial source/import graph still stop --check before
+execution. Runtime errors and syntax/type errors inside dynamic code can be
+caught. An exception_type result can be called, raised and selected in except.
+
+    type Manager:(function __enter__;function __exit__)
+    def enter():(return "resource")
+    def leave(error_type,error,location):(println("closed");return false)
+    with Manager(enter,leave) as resource:(println(resource))
+
+with calls __enter__() and __exit__(error_type,error,location_string). Normal
+completion passes three null values. true from __exit__ suppresses an error.
+Multiple managers enter left to right and exit in reverse order. Manager
+callables stored in record fields explicitly capture their state; record
+methods and automatic self binding remain absent.
+
+LAZY ITERATION AND GENERATORS
+
+    range(stop) -> range
+    range(start,stop[,step]) -> range
+    iter(iterable) -> iterator
+    next(iterator[,default]) -> value; StopIteration without a default
+    close(iterator) -> void
+    iterator.close() -> void
+    enumerate(iterable[,start_integer]) -> lazy iterator of (index,value)
+    zip(*iterables) -> lazy iterator of tuples; stops at shortest source
+    map(function,*iterables) -> lazy iterator; stops at shortest source
+    filter(function_or_null,iterable) -> lazy iterator
+    reversed(iterable) -> iterator
+    sum(iterable[,start]) -> number/value, default start=0
+    all(iterable) -> bool
+    any(iterable) -> bool
+
+range is lazy, end-exclusive, and accepts int/bigint bounds and a nonzero
+step. It supports len(), membership, indexing and slicing without generating
+all values. len() returns bigint when the count exceeds signed 64 bits.
+Use list(range(...)) when a materialized list is needed. For compatibility,
+a typed list binding/argument can materialize an incoming range.
+all/any and filter predicates require bool, consistent with Oak conditions.
+filter(null,values) uses the bool values themselves. reversed(range) remains
+lazy; reversing other iterables materializes them. Mapping/filtering functions
+run only as their results are requested. all/any stop when their answer is known.
+
+    def numbers(limit=5):(
+        try:(
+            for i in range(limit):(yield i*i)
+            yield from [100,200]
+        )
+        finally:(println("generator closed"))
+    )
+    g=numbers()
+    println(next(g))
+    close(g)
+
+Any function containing yield returns a generator without running its body.
+yield value suspends; yield from iterable forwards its values. return ends
+iteration. next(g,default) returns the default after exhaustion. Closing a
+started generator runs finally/with cleanup once; closing an unstarted one
+does not run its body. Breaking a loop preserves a generator for later next;
+close it explicitly when finished. Interpreter disposal closes live generators.
+Generators can yield from finally during normal iteration, but yielding while
+close() runs is a RuntimeError. send()/throw() and yield expression values are
+not implemented. Custom record iterables store __iter__ and/or __next__
+callables; __iter__ returns an iterator, and __next__ raises StopIteration.
+
+DYNAMIC CODE: EVAL, EXEC AND EVXEC
+
+    eval(expression_string) -> expression value
+    exec(statements_string) -> null
+    evxec(code_string) -> final expression / explicit return value / null
+
+All three execute Oak code using the caller's lexical variables, functions,
+types and imports. eval accepts exactly one expression, including literals,
+calls, lambdas and comprehensions. exec accepts statements and retains writes
+in the caller's scope. evxec accepts either form and has function-like return
+control: an explicit return wins; otherwise a final expression is the result.
+If nothing returns a value, evxec returns null (Oak's none value).
+
+    int x=4
+    int y=3
+    assert(eval("x**y")==64)
+    exec("x+=1; created=7")
+    assert(x==5 and created==7)
+    assert(evxec("x+=2; x*y")==21)
+    assert(evxec("x+=1") is null)
+    assert(evxec("") is null)
+    assert(evxec("if x>0:(return x)\nreturn -x")==8)
+
+Assignments update an existing visible binding or create one in the caller's
+current scope. Existing binding types and readonly rules still apply. New
+bindings inside if/for/try blocks retain Oak's lexical block scope rules.
+Definitions created by exec/evxec remain callable in the caller's scope.
+Imports and file resources resolve relative to the calling source file.
+Generated locations use SOURCE.__oak_eval__.oak / .__oak_exec__.oak /
+.__oak_evxec__.oak virtual filenames and the line/column inside the string.
+No temporary source file is required. SyntaxError, TypeError, NameError and
+other execution errors can be caught using try/except. Each distinct program
+is parsed/checked before its own statements execute; an executed statement
+error retains earlier writes, like an ordinary function. Parsed/compiled
+programs are cached while the visible binding/type signatures remain valid.
+--check never executes dynamic strings, so it cannot predict their contents.
+
+Native compilation for the documented CPU, 2D/3D graphics, audio and compute subset is available through
+oakscript compile. JIT and native compilation of the remaining language are
+future work. The file runner still uses the optimizing bytecode VM; new
+structured constructs share AST execution inside that VM.
+Built-in/resource/record constructor keyword arguments, positional-only /
+parameters, async functions, record methods and user operator overloads remain
+outside the current function API. User functions support defaults, positional
+and keyword calls, *args, keyword-only parameters, **kwargs, lambda and decorators.
+
+    oakscript examples/language-features.oak
+    oakscript examples/dynamic-code.oak
+
+NATIVE COMPILER 0.7.0 COVERAGE
+All syntax described above remains language syntax. Native coverage is listed in
+docs/NATIVE_COMPILATION.md. Current native exclusions: bigint/decimal/complex,
+runtime eval/exec/evxec, nested type/schema/options declarations, advanced format
+specifications, scalar boxing identity, tracing GC and non-Windows targets.
+Native graphics controls: --oak-frames N --oak-capture PNG.
+Example: oakscript compile examples/native-features.oak -o features.exe

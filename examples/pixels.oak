@@ -1,0 +1,8 @@
+window "My first canvas" 800 600
+
+def draw():(
+    clear((17, 28, 25))
+    fill_poly([(100, 100), (400, 100), (250, 350)], (164, 224, 125))
+    set_pixel(450, 250, (255, 255, 255))
+    if key_pressed("Escape"):(close_window())
+)

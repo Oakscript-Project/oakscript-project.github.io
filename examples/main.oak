@@ -1,0 +1,2 @@
+from "lib/greeting.oak" import greet
+print(greet("Oak"))
