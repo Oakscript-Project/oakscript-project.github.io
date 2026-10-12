@@ -5,6 +5,7 @@ OakScript uses these pinned packages and their transitive dependencies. Their co
 `LICENSE.txt` applies to the owner's original OakScript implementation and executable only to the extent of rights the owner controls. It does not replace or narrow the independent licenses and permissions of the third-party components listed below or the included font. Redistribution rights granted by those licenses remain in force for those components.
 
 - Veldrid 4.9.0, Veldrid.StartupUtilities 4.9.0, Veldrid.SDL2 4.9.0: Eric Mellino and Veldrid contributors, MIT. https://github.com/veldrid/veldrid
+- Veldrid.SPIRV 1.0.15: Eric Mellino and contributors, MIT. Its native shader translation library includes SPIRV-Cross (Apache 2.0), shaderc and SPIRV-Tools (Apache 2.0), SPIRV-Headers (MIT), glslang (BSD/MIT and related notices), re2 (BSD) and effcee (Apache 2.0). Upstream tag `v1.0.15`, submodule and `ext/known_good.json` revisions supply the complete `Veldrid-SPIRV-*` notices in `third-party-licenses/`. https://github.com/veldrid/veldrid-spirv/tree/v1.0.15
 - Vk 1.0.25: Eric Mellino and contributors, MIT. https://github.com/mellinoe/vk
 - NativeLibraryLoader 1.0.13: Eric Mellino and contributors, MIT. https://github.com/mellinoe/nativelibraryloader
 - StbImageSharp 2.30.16: StbSharp contributors, distributed under the Unlicense alternative. https://github.com/StbSharp/StbImageSharp
@@ -16,8 +17,9 @@ OakScript uses these pinned packages and their transitive dependencies. Their co
 - The self-contained Microsoft .NET runtime: .NET Foundation and contributors, MIT and associated third-party notices. https://github.com/dotnet/runtime
 
 The optional native compiler invokes an installed MinGW-w64 GCC toolchain; the
-toolchain itself is not bundled. The included `native-math.exe` was built with
-GCC 15.2.0 and statically links these native runtime components:
+toolchain itself is not bundled. The included native examples and the runner's
+embedded optional `oakcuda.dll` driver bridge were built with GCC 15.2.0 and
+statically link these native runtime components:
 
 - GCC `libgcc` and GNU `libstdc++`: Free Software Foundation and contributors,
   GPL-3.0-or-later with GCC Runtime Library Exception 3.1. The license, exception,
@@ -29,7 +31,15 @@ GCC 15.2.0 and statically links these native runtime components:
   unchanged in `third-party-licenses/winpthreads-COPYING.txt`.
 
 Native programs built using another toolchain use that toolchain's own runtime
-components and notices. The ordinary runner does not link these GCC libraries.
+components and notices. The runner's CUDA bridge includes these GCC libraries;
+the managed interpreter itself does not link them.
+
+The CUDA kernels and driver bridge are original OakScript code. The runner and
+native EXEs embed their generated PTX, but no NVIDIA Toolkit/NVRTC/compiler DLLs
+are redistributed. `nvcuda.dll` is loaded from the user's installed NVIDIA
+display driver. The optional build helper downloads checksum-verified NVIDIA
+NVRTC 12.8.93 into a local build cache only; that tool remains subject to its
+own NVIDIA license. https://docs.nvidia.com/cuda/nvrtc/index.html
 
 The example models, checker texture, Acorn Run scenery, Oak Blocks textures, and example WAV sounds are generated within this project. Acorn Run and Oak Blocks include the unchanged Atkinson Hyperlegible font, copyright 2020 Braille Institute of America, Inc., under SIL Open Font License 1.1. Its full license is distributed with each game's font as `assets/OFL.txt`.
 
