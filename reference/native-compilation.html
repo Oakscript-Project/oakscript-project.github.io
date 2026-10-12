@@ -16,7 +16,7 @@
   <nav aria-label="Reference navigation"><a href="../">OakScript</a> | <a href="NATIVE_COMPILATION.md">Source</a></nav>
   <main>
 <h1>Native compilation</h1>
-<p>OakScript 0.7.0 compiles CPU, 2D/3D graphics, audio and GPU compute programs to
+<p>OakScript 0.8.1 compiles CPU, 2D/3D graphics, audio and GPU compute programs to
 standalone Windows x64 machine code.</p>
 <pre><code class="language-powershell">oakscript compile program.oak -o program.exe
 ./program.exe &quot;quoted argument&quot;
@@ -195,6 +195,10 @@ Compile that layout with <code>--libpath .</code>; put its <code>assets/</code> 
 The portable builder retains the ordinary source layout and supplies the native
 font layout as well. Oak Blocks also compiles unchanged; <code>build.ps1 -Native</code>
 packages <code>dist/OakBlocks/oakblocks.exe</code> and <code>NativePlay.cmd</code> with its assets.</p>
+<p>Optional built-in CUDA 3D rendering is compiled directly into native programs.
+Select <code>use_cuda(true)</code> before creating windows; the same mesh/model/polygon APIs
+are used. Only an NVIDIA CUDA 12.8-capable display driver is needed at runtime;
+CUDA compiler packages are not embedded. See <a href="CUDA_RENDERING.md">CUDA rendering</a>.</p>
   </main>
 </body>
 </html>

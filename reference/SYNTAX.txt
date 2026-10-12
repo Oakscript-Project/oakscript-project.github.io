@@ -1,4 +1,4 @@
-OAKSCRIPT 0.7.0 - SYNTAX AND BUILT-IN REFERENCE
+OAKSCRIPT 0.8.1 - SYNTAX AND BUILT-IN REFERENCE
 ============================================
 
 This describes the implemented Windows x64 runner, not planned features.
@@ -1133,7 +1133,13 @@ never executes code or module hooks. It reports the first compiler error and
 uses UTF-16 positions with full-document synchronization.
 The separately built VS Code extension also supplies .oak highlighting and
 Run File / Check File commands. The extension is not required to run scripts.
-Rename, formatting, debugger and refactoring support are not implemented.
+Run and Debug supports F5, Ctrl+F5, source/conditional/hit breakpoints, logpoints,
+stepping, variables, watches and call stacks. Debug sessions use the AST engine;
+Run Without Debugging uses bytecode. oakscript dap speaks Debug Adapter Protocol
+over stdin/stdout. See tooling/vscode/README.md for launch.json and program input.
+Native executable/attach debugging, exception/function/data breakpoints and
+reverse stepping remain unsupported. Rename, formatting and refactoring are not
+implemented.
 
 16. LEARNING FROM OAK BLOCKS
 ---------------------------
@@ -1733,7 +1739,36 @@ and keyword calls, *args, keyword-only parameters, **kwargs, lambda and decorato
     oakscript examples/language-features.oak
     oakscript examples/dynamic-code.oak
 
-NATIVE COMPILER 0.7.0 COVERAGE
+OPTIONAL CUDA 3D RENDERING
+    cuda_available() -> bool
+    use_cuda(enabled=true) -> none
+    graphics_backend() -> string
+    cuda_stats() -> list
+
+Select use_cuda(true) before creating windows or native GPU resources.
+cuda_available() checks NVIDIA driver/device availability. An explicit CUDA
+request fails if unavailable; it has no CPU fallback. use_cuda(false) keeps the
+default backend. graphics_backend() returns "cuda", "vulkan" (runner default),
+or "opengl" (native default). cuda_stats() returns active-window counters:
+[triangles, batches, geometry_uploads, texture_uploads, kernel_launches, device].
+All counters except triangles are cumulative. Each window has separate state.
+
+    use_cuda(cuda_available())
+    window "Oak CUDA" 800 600
+    def draw():(
+        clear((20,28,38))
+        fill_poly([vec3(-1,-1,0),vec3(1,-1,0),vec3(0,1,0)],(255,140,60))
+    )
+
+Built-in 3D filled polygons, meshes, models and text use CUDA. 2D/presentation
+remain OpenGL. Textures/depth/culling/blending and diffuse lights are supported.
+CUDA shadows are GPU visibility rays; <hard> is one sample, <pcf> nine filtered
+samples. shadow_bias is world-space; atlas shadow_extent/shadow_near do not apply.
+Custom SPIR-V 3D material shaders are rejected; dispatch() remains ordinary GPU
+compute. Existing custom compute path tracers are not ported automatically.
+See docs/CUDA_RENDERING.md and examples/cuda-3d.oak for requirements and examples.
+
+NATIVE COMPILER 0.8.0 COVERAGE
 All syntax described above remains language syntax. Native coverage is listed in
 docs/NATIVE_COMPILATION.md. Current native exclusions: bigint/decimal/complex,
 runtime eval/exec/evxec, nested type/schema/options declarations, advanced format

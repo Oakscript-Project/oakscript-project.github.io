@@ -1,6 +1,6 @@
 # Native compilation
 
-OakScript 0.7.0 compiles CPU, 2D/3D graphics, audio and GPU compute programs to
+OakScript 0.8.1 compiles CPU, 2D/3D graphics, audio and GPU compute programs to
 standalone Windows x64 machine code.
 
 ```powershell
@@ -204,3 +204,8 @@ Compile that layout with `--libpath .`; put its `assets/` beside the native EXE.
 The portable builder retains the ordinary source layout and supplies the native
 font layout as well. Oak Blocks also compiles unchanged; `build.ps1 -Native`
 packages `dist/OakBlocks/oakblocks.exe` and `NativePlay.cmd` with its assets.
+
+Optional built-in CUDA 3D rendering is compiled directly into native programs.
+Select `use_cuda(true)` before creating windows; the same mesh/model/polygon APIs
+are used. Only an NVIDIA CUDA 12.8-capable display driver is needed at runtime;
+CUDA compiler packages are not embedded. See [CUDA rendering](CUDA_RENDERING.md).
