@@ -16,7 +16,7 @@
   <nav aria-label="Reference navigation"><a href="../">OakScript</a> | <a href="NATIVE_COMPILATION.md">Source</a></nav>
   <main>
 <h1>Native compilation</h1>
-<p>OakScript 0.8.2 compiles CPU, 2D/3D graphics, audio and GPU compute programs to
+<p>OakScript 0.9.0 compiles CPU, 2D/3D graphics, audio and GPU compute programs to
 standalone Windows x64 machine code.</p>
 <pre><code class="language-powershell">oakscript compile program.oak -o program.exe
 ./program.exe &quot;quoted argument&quot;
@@ -74,8 +74,16 @@ fields, extended custom option sets and typed module exports. It returns sorted
 names without invoking attribute getters; ordinary attributes return <code>[]</code> and
 unknown attributes raise <code>TypeError</code>. See <a href="https://github.com/FIRECATCHER404/OakScript/blob/main/examples/attribute-options.oak">attribute options</a>.
 Records can store functions with per-instance lexical state; see
-<a href="https://github.com/FIRECATCHER404/OakScript/blob/main/examples/record-functions.oak">record functions</a>. Automatic method/self
-binding and Python-style class inheritance are not implemented.</li>
+<a href="https://github.com/FIRECATCHER404/OakScript/blob/main/examples/record-functions.oak">record functions</a>. User-defined types also
+support bound instance methods, static/class methods, properties, custom
+<code>def @init</code>/<code>def @new</code>, dynamic attributes, nested types, C3 multiple inheritance
+and <code>super()</code>. Operator, conversion, call, hash, iterator, item/slice, context
+and descriptor hooks use the same <code>@name</code> syntax in both backends.
+Reflection includes <code>type</code>, dynamic <code>type(name,bases,dict)</code>, <code>vars</code>, <code>repr</code>,
+<code>hash</code>, attribute helpers and instance/subclass checks. See
+<a href="https://github.com/FIRECATCHER404/OakScript/blob/main/examples/type-classes.oak">type classes</a>, <a href="https://github.com/FIRECATCHER404/OakScript/blob/main/examples/type-protocols.oak">protocols</a>,
+<a href="https://github.com/FIRECATCHER404/OakScript/blob/main/examples/type-inheritance.oak">inheritance</a>, <a href="https://github.com/FIRECATCHER404/OakScript/blob/main/examples/type-reflection.oak">reflection</a>,
+and <a href="https://github.com/FIRECATCHER404/OakScript/blob/main/examples/type-conversions.oak">conversions</a>.</li>
 <li>First-class, recursive, nested functions; retained lexical closures; lambdas;
 decorators; defaults evaluated once; keyword-only parameters; typed <code>*args</code>
 and <code>**kwargs</code>; positional and keyword expansion.</li>
@@ -93,7 +101,8 @@ range slicing, mutable sequence index/slice assignment and <code>del</code>.</li
 <code>with</code>. Cleanup handles return, break, continue and generator close.</li>
 <li><code>dir</code> for attributes/fields/methods and module exports. <code>.format</code> supports
 automatic/numeric fields, named fields and escaped braces. <code>%s</code>/<code>%%</code> accepts
-single values or tuples. Advanced format specifications remain unsupported.</li>
+single values or tuples. Custom object <code>@format</code> specifications are supported; advanced built-in format
+specifications remain unsupported.</li>
 <li>Checked imports and aliases, live module values, shared imported bindings,
 initialization once, <code>__init__</code>/<code>__dispose__</code> hooks and generator cleanup.</li>
 <li>Only the entry file's own <code>__main__</code> runs automatically, after top-level code.
@@ -208,6 +217,9 @@ packages <code>dist/OakBlocks/oakblocks.exe</code> and <code>NativePlay.cmd</cod
 Select <code>use_cuda(true)</code> before creating windows; the same mesh/model/polygon APIs
 are used. Only an NVIDIA CUDA 12.8-capable display driver is needed at runtime;
 CUDA compiler packages are not embedded. See <a href="CUDA_RENDERING.md">CUDA rendering</a>.</p>
+<p>Class limits: no custom metaclasses, built-in subclasses, <code>@slots</code>, automatic
+finalizers/weak references, async methods or class-pattern matching. The native
+backend still rejects bigint/decimal/complex and dynamic eval/exec/evxec.</p>
   </main>
 </body>
 </html>
