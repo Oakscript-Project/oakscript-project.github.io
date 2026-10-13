@@ -16,7 +16,7 @@
   <nav aria-label="Reference navigation"><a href="../">OakScript</a> | <a href="NATIVE_COMPILATION.md">Source</a></nav>
   <main>
 <h1>Native compilation</h1>
-<p>OakScript 0.8.1 compiles CPU, 2D/3D graphics, audio and GPU compute programs to
+<p>OakScript 0.8.2 compiles CPU, 2D/3D graphics, audio and GPU compute programs to
 standalone Windows x64 machine code.</p>
 <pre><code class="language-powershell">oakscript compile program.oak -o program.exe
 ./program.exe &quot;quoted argument&quot;
@@ -44,7 +44,8 @@ beside it. Failed checks/compiler invocations preserve an existing output EXE.
 GPU shader builds cache the compiled SPIRV-Cross support object under
 <code>%LOCALAPPDATA%/OakScript/native-cache</code>; the cache key includes source bytes,
 compiler identity and build flags. This cache is used on the build machine only.
-For a manual rebuild, compile the emitted program with C++20, <code>-municode</code>, static
+For a manual rebuild, compile the emitted program with C++20, <code>-municode</code>,
+<code>-Wa,-mbig-obj</code> (large COFF objects for unoptimized graphics builds), static
 GCC/C++ runtime flags, and the emitted <code>spirv_cross.cpp</code>, <code>spirv_parser.cpp</code>,
 <code>spirv_cross_parsed_ir.cpp</code>, <code>spirv_cfg.cpp</code>, <code>spirv_glsl.cpp</code> when present.
 Graphics links <code>opengl32</code>, <code>gdi32</code>, <code>user32</code>; audio links <code>winmm</code>.</p>
@@ -67,6 +68,14 @@ Known scalar operations lower to typed native arithmetic; eligible range
 loops lower to native loop counters.</li>
 <li>Nominal records, per-instance defaults, readonly/typed fields, nested tuple
 initialization, attribute schemas, extensible nominal option sets and aliases.</li>
+<li><code>dir(value)</code> and <code>opt_dir(value,&quot;attribute&quot;)</code> reflection. Option inspection
+uses the same built-in attribute schemas as the runner and includes inherited
+fields, extended custom option sets and typed module exports. It returns sorted
+names without invoking attribute getters; ordinary attributes return <code>[]</code> and
+unknown attributes raise <code>TypeError</code>. See <a href="https://github.com/FIRECATCHER404/OakScript/blob/main/examples/attribute-options.oak">attribute options</a>.
+Records can store functions with per-instance lexical state; see
+<a href="https://github.com/FIRECATCHER404/OakScript/blob/main/examples/record-functions.oak">record functions</a>. Automatic method/self
+binding and Python-style class inheritance are not implemented.</li>
 <li>First-class, recursive, nested functions; retained lexical closures; lambdas;
 decorators; defaults evaluated once; keyword-only parameters; typed <code>*args</code>
 and <code>**kwargs</code>; positional and keyword expansion.</li>

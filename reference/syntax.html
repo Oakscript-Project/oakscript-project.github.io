@@ -15,7 +15,7 @@
 <body>
   <nav aria-label="Reference navigation"><a href="../">OakScript</a> | <a href="SYNTAX.txt">Source</a></nav>
   <main>
-<h1>OAKSCRIPT 0.8.1 - SYNTAX AND BUILT-IN REFERENCE</h1>
+<h1>OAKSCRIPT 0.8.2 - SYNTAX AND BUILT-IN REFERENCE</h1>
 <p>This describes the implemented Windows x64 runner, not planned features.
 OakScript's short name is Oak. Source files end in .oak.
 Names and imported exports are case-sensitive.
@@ -532,7 +532,12 @@ Constructors accept positional arguments or one tuple. Omitted trailing fields
 must have defaults. Default expressions run for each instance in the declaration
 scope; they cannot refer to the instance's fields. Mutable defaults are fresh.
 An existing instance passed to its own constructor is returned unchanged.
-Records share references. No methods, generics or record operator overloads.</p>
+Records share references. They can store function values in any fields and call
+them as object.function(...). These functions receive only the arguments you
+pass; there is no implicit self parameter. A nested function can capture its
+own record to provide an instance-specific operation. See record-functions.oak.
+There is no class inheritance, method declaration syntax, generics or record
+operator overloading; schemas compose fields instead.</p>
 <pre><code>options Name:(first;second)
 options Name:(first, second)
 extend options Name:(third)
@@ -656,6 +661,7 @@ input([prompt])                              string; read a console line
 len(value)                                   int; string/list/tuple/bytearray/vector size
 type_of(value)                               string; runtime type name
 dir(value)                                   list of sorted unique attribute names
+opt_dir(value, attribute_name)                sorted allowed option names for an attribute
 range(stop)                                  list; 0 to stop, exclusive
 range(start, stop[, step])                    list; signed integer step
 append(list_or_bytearray, value)              void; append one element
@@ -706,6 +712,26 @@ print(dir(lib))
 print(dir(create_camera()))
 print(dir(Point))
 </code></pre>
+<p>opt_dir(value, &quot;attribute&quot;) returns a fresh list of sorted option-name strings.
+It inspects declarations, without reading the attribute or invoking functions.
+For an existing attribute without a fixed option set it returns []. Unknown
+attributes and invalid argument types raise TypeError. Attribute names are
+case-sensitive. User-defined option sets include extensions and inherited
+schema fields; record constructors and schemas can be inspected directly.
+Module namespaces support exports declared with an option-set type.
+Strings returned by opt_dir are names; assign options using &lt;name&gt; as usual.</p>
+<pre><code>texture image = load_texture(&quot;assets/checker.png&quot;)
+print(opt_dir(image, &quot;filter&quot;))        \ [linear, nearest]
+print(opt_dir(image, &quot;wrap&quot;))          \ [clamp, mirror, repeat]
+light lamp = create_light()
+print(opt_dir(lamp, &quot;type&quot;))           \ [directional, point, spot]
+print(opt_dir(lamp, &quot;intensity&quot;))      \ []
+lamp.type = &lt;point&gt;
+options State:(idle;active)
+type Task:(State state = &lt;idle&gt;)
+print(opt_dir(Task, &quot;state&quot;))          \ [active, idle]
+</code></pre>
+<p>Both the runner and native compiler support opt_dir.</p>
 <h3>Example: files.oak</h3>
 <pre><code class="language-oak">write_text(&quot;example-output.txt&quot;, &quot;Saved by Oak\n&quot;)
 assert(file_exists(&quot;example-output.txt&quot;))
