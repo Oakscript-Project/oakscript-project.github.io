@@ -10,7 +10,7 @@
 <body>
   <main class="page">
     <p><a href="../">OakScript</a></p>
-    <h1>OakBoot 0.2.0 preview</h1>
+    <h1>OakBoot 0.2.1 preview</h1>
     <p>A separate Windows compiler for native x64 UEFI programs. The boot machine needs no OS, OakScript runtime or DLLs. The compiler computer needs MinGW-w64 x64 GCC.</p>
     <pre><code>.\oakboot.exe .\examples\boot-demo.oak -o demo.efi --image demo.img
 
@@ -18,6 +18,7 @@
 .\oakboot.exe .\examples\boot-demo.oak -o demo-ps2.efi --image demo-ps2.img --bare-metal --keyboard ps2</code></pre>
     <p>Copy the compiled EFI file to <code>EFI\BOOT\BOOTX64.EFI</code> on a FAT32 USB drive and select its UEFI boot entry. Firmware must allow this unsigned program. The package also includes a QEMU launcher and ready-made demo images.</p>
     <p>Version 0.2.0 compiles the unchanged Cubes Game TI source, including selective and aliased imports, nested lists, byte arrays, default arguments, embedded TrueType text and PS/2 mouse input. <a href="OAKBOOT_CUBES.md">Cubes compilation and validation</a>.</p>
+    <p>Version 0.2.1 fixes the QEMU launcher: explicit raw disk format, a temporary write overlay, corrected serial logging and rejection of EFI executables passed as disk images.</p>
     <p>The renderer runs on the CPU and writes to the firmware-initialized framebuffer. Native resolution depends on the modes firmware exposes. The raw backend exits UEFI boot services and polls a PS/2 controller. The default firmware keyboard backend produces short keystroke pulses.</p>
     <p>This preview has no accelerated GPU backend, native USB HID state driver, general speaker/headphone audio, legacy BIOS boot or full OakScript compatibility. Physical ASUS and other motherboard testing is still missing. Sound is limited to compatible PC-speaker tones.</p>
     <p>Generated images have been tested under QEMU/OVMF at 1920×1080 with pixel checks, held-key/release checks and captured PC-speaker tones. Emulator measurements do not establish physical-hardware performance or compatibility.</p>
